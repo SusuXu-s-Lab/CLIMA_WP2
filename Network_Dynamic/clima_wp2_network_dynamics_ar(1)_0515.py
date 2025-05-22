@@ -372,7 +372,7 @@ def create_network_matrices(households_df, network_df):
             if conn_type == 1:  # Bonding
                 W_B[i, j] = weight
                 W_B[j, i] = weight
-            elif conn_type == 2: # Bridging
+            elif conn_type == 0 # Bridging
                 W_R[i, j] = weight
                 W_R[j, i] = weight
             # else: ignore other types if any
