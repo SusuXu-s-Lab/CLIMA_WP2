@@ -15,5 +15,8 @@ predict.py: model II in: "Inferring Friendship from Check-in Data of Location-Ba
 *Version 2*
 
 **Network Dynamics**
+*Version 1* Static
+
+*Version 2* Time-varying Threshold and Network
 
 
