@@ -42,3 +42,77 @@ def generate_T0_states(house_df_with_features, T):
     # Convert to DataFrame
     states_df = pd.DataFrame(states)
     return states_df
+
+
+def update_full_states_one_step(full_states_df: pd.DataFrame,
+                                p_self_series: pd.Series,
+                                p_ji_df: pd.DataFrame,
+                                links_df: pd.DataFrame,
+                                t: int,
+                                k: int) -> pd.DataFrame:
+    """
+    Update full_states_df in-place for time t+1, dimension k.
+
+    Parameters
+    ----------
+    full_states_df : DataFrame
+        Columns ['home','time','repair_state','vacancy_state','sales_state'].
+        Rows for all times 0..T already exist (future rows • value 0 placeholder).
+    p_self_series : Series
+        p_self_i^k(t) indexed by household 'home'.
+    p_ji_df : DataFrame
+        p_{ji}^k(t) matrix (rows = j, cols = i).  Must use same home order as links_df.
+    links_df : DataFrame
+        Symmetric link matrix ℓ_{ij}(t) (values 0/1/2) for current step t.
+    t : int
+        Current time step (states at time t must already be filled).
+    k : int
+        Target state dimension (0=repair, 1=vacancy, 2=sales).
+
+    Returns
+    -------
+    full_states_df : DataFrame
+        Same object, but states at time t+1 for dimension k are updated.
+    """
+
+    state_cols = ['repair_state', 'vacancy_state', 'sales_state']
+    k_col      = state_cols[k]
+
+    # --- 0. Slice current & next rows ---------------------------------------
+    cur_df  = full_states_df[full_states_df['time'] == t].set_index('home')
+    next_df = full_states_df[full_states_df['time'] == t + 1].set_index('home').copy()
+
+    homes   = cur_df.index.tolist()
+    link_m  = links_df.values
+    state_k = cur_df[k_col].values        # s_i^k(t)
+
+    rng = np.random.default_rng()
+
+    # --- 1. Update each household -------------------------------------------
+    for i, h_i in enumerate(homes):
+
+        # (a) irreversible: once active -> remain 1
+        if state_k[i] == 1:
+            next_df.at[h_i, k_col] = 1
+            continue
+
+        # (b) assemble active neighbours j with s_j^k(t)=1 & link>0
+        neighbours_idx = np.where((link_m[:, i] > 0) & (state_k == 1))[0]
+
+        if neighbours_idx.size == 0:
+            activate_prob = p_self_series.loc[h_i]
+        else:
+            prod_term = np.prod(1 - p_ji_df.iloc[neighbours_idx, i].values)
+            activate_prob = 1 - (1 - p_self_series.loc[h_i]) * prod_term
+
+        # (c) Bernoulli sampling
+        next_df.at[h_i, k_col] = int(rng.random() < activate_prob)
+
+    # --- 2. Write back to full_states_df ------------------------------------
+    full_states_df.set_index(['home', 'time'], inplace=True)
+    next_df.index = pd.MultiIndex.from_arrays([next_df.index, [t + 1] * len(next_df)], names=['home', 'time'])
+
+    full_states_df.loc[next_df.index, k_col] = next_df[k_col].values
+
+    full_states_df.reset_index(inplace=True)
+    return full_states_df
