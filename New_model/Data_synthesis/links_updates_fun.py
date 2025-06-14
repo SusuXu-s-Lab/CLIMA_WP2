@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.special import softmax
 import pandas as pd
+from sklearn.metrics.pairwise import haversine_distances
+import pygeohash as pgh
 
 def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.5):
     homes = similarity_df.index.tolist()
@@ -28,3 +30,190 @@ def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.
     link_matrix[(triu_indices[1], triu_indices[0])] = link_types
 
     return pd.DataFrame(link_matrix, index=homes, columns=homes)
+
+def compute_p_self(house_df, full_state_df, t, k, L=3):
+    """
+    Compute p_self^k_i(t) for each household i using linear features + sigmoid.
+
+    Args:
+        house_df: DataFrame with static features, indexed by 'home'
+        full_state_df: DataFrame of all states across time
+        t: current time step
+        k: state dimension (0=repair, 1=vacancy, 2=sales)
+        L: number of past steps to consider
+
+    Returns:
+        Series of p_self^k_i(t), indexed by household ID
+    """
+    x_i = house_df[['income', 'age', 'race']].copy()
+    state_cols = ['repair_state', 'vacancy_state', 'sales_state']
+    non_k_cols = [col for i, col in enumerate(state_cols) if i != k]
+
+    # Collect state history from t-L to t-1
+    frames = []
+    for delta in range(1, L + 1):
+        time_lookup = t - delta
+        if time_lookup >= 0:
+            df_slice = full_state_df[full_state_df['time'] == time_lookup].copy()
+        else:
+            df_slice = pd.DataFrame(columns=['home', 'time'] + state_cols)
+        frames.append(df_slice)
+
+    state_hist_df = pd.concat(frames, ignore_index=True)
+    s_mean = state_hist_df.groupby('home')[non_k_cols].mean()
+
+    # Combine features
+    x_all = pd.concat([x_i, s_mean], axis=1)
+    x_all['time'] = t
+    x_all = x_all.fillna(0)
+
+    weights = np.array([1.0, 0.5, 0.5, -0.8, -0.8, 0.01])  # shape (6,)
+    dot = x_all.values @ weights
+    p_self = 1 / (1 + np.exp(-dot))
+
+    return pd.Series(p_self, index=x_all.index)
+
+def compute_p_ji_linear(link_df,
+                        house_df_with_features,
+                        full_state_df,
+                        t: int,
+                        k: int,
+                        L: int = 3):
+    """
+    Same signature / semantics, but vectorised for speed.
+    """
+    homes   = house_df_with_features['home'].tolist()
+    N       = len(homes)
+    idx_map = {h: i for i, h in enumerate(homes)}
+
+    # ---------- (1) static feature blocks ----------
+    demo_mat = house_df_with_features[['income', 'age', 'race']].values     # (N,3)
+    f_demo   = np.abs(demo_mat[:, None, :] - demo_mat[None, :, :])          # (N,N,3)
+
+    coords     = house_df_with_features['home'].apply(pgh.decode).tolist()
+    geo_dist   = haversine_distances(np.radians(coords)) * 6_371_000        # (N,N)
+
+    # ---------- (2) history tensor ----------
+    state_cols  = ['repair_state', 'vacancy_state', 'sales_state']
+    non_k_cols  = [c for i_, c in enumerate(state_cols) if i_ != k]         # length 2
+    hist_tensor = np.zeros((N, L, len(non_k_cols)))                         # (N,L,2)
+
+    for offset in range(1, L + 1):
+        t_lkp = t - offset
+        if t_lkp < 0:
+            break
+        slice_df = (full_state_df[full_state_df['time'] == t_lkp]
+                    .set_index('home')[non_k_cols])
+        common = slice_df.index.intersection(homes)
+        hist_tensor[[idx_map[h] for h in common], L - offset, :] = slice_df.loc[common].values
+
+    hist_flat = hist_tensor.reshape(N, -1)                                  # (N,2L)
+
+    # ---------- (3) assemble features for all (j,i) ----------
+    link_mat = link_df.values  # (N,N)
+    link_feat = link_mat[..., None]  # (N,N,1)
+
+    hist_src = np.broadcast_to(hist_flat[:, None, :],  # src=j，行向量
+                               (N, N, 2 * L))  # => (N,N,2L)
+    hist_tgt = np.broadcast_to(hist_flat[None, :, :],  # tgt=i，列向量
+                               (N, N, 2 * L))  # => (N,N,2L)
+
+    feat_all = np.concatenate(
+        [f_demo,  # (N,N,3)
+         hist_src,  # (N,N,2L)
+         hist_tgt,  # (N,N,2L)
+         link_feat,  # (N,N,1)
+         geo_dist[..., None]],  # (N,N,1)
+        axis=-1)  # -> (N,N,3+4L+2)
+
+    # ---------- (4) weighted linear score ----------
+    w_demo   = np.array([-2.0, -1.5, -1.5])
+    w_hist   = np.full(2 * L, -1.0)                # applies to both src & tgt
+    w_link   = np.array([0.8])
+    w_dist   = np.array([-3])
+    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist])     # (3+4L+2,)
+
+    scores = np.tensordot(feat_all, weights, axes=([-1], [0]))             # (N,N)
+    p_mat  = 1.0 / (1.0 + np.exp(-scores))                                 # sigmoid
+
+    # ---------- (5) mask out self-pairs & absent links ----------
+    mask = (link_mat == 0) | np.eye(N, dtype=bool)
+    p_mat[mask] = 0.0
+
+    return pd.DataFrame(p_mat, index=homes, columns=homes)
+
+def update_link_matrix_one_step(similarity_df: pd.DataFrame,
+                                interaction_df: pd.DataFrame,
+                                links_prev_df: pd.DataFrame,
+                                house_states: pd.DataFrame,
+                                t: int,
+                                alpha_bonding: float = 0.9,
+                                beta_form: float   = 0.5,
+                                gamma: float       = 0.3) -> pd.DataFrame:
+    """
+    One-step link–transition update  ( t-1  ➜  t )  following Eq.(13)–(17).
+
+    Parameters
+    ----------
+    similarity_df   : DataFrame  –  similarity(i,j,t)  (symmetric, N×N)
+    interaction_df  : DataFrame  –  interaction_potential(i,j,t)  (symmetric, N×N)
+    links_prev_df   : DataFrame  –  link matrix ℓ_{ij}(t-1)  (values 0/1/2, symmetric)
+    house_states    : DataFrame  –  long table with ['home','time','vacancy_state', ...]
+    t               : int        –  current time step (links_prev_df is t-1; we create t)
+    alpha_bonding   : float      –  coefficient in Eq.(13)
+    beta_form       : float      –  coefficient in Eq.(13)
+    gamma           : float      –  decay factor for bridging when either household is vacant
+
+    Returns
+    -------
+    DataFrame  –  new symmetric link matrix  ℓ_{ij}(t)
+    """
+
+    homes = similarity_df.index.tolist()          # common ordering for all matrices
+    N     = len(homes)
+
+    # --- fetch vacancy indicators at time t ---------------------------------
+    vac_t = (house_states[house_states['time'] == t]
+             .set_index('home')
+             .reindex(homes)['vacancy_state']
+             .fillna(0)
+             .astype(int)
+             .values)                              # shape (N,)
+
+    # --- initialise new link matrix with zeros ------------------------------
+    link_new = np.zeros((N, N), dtype=int)
+
+    link_prev = links_prev_df.values
+    sim_mat   = similarity_df.values
+    inter_mat = interaction_df.values
+
+    rng = np.random.default_rng()
+
+    for i in range(N):
+        for j in range(i + 1, N):                  # upper-triangle only
+            prev = link_prev[i, j]
+
+            # 1)  from NO-LINK  (Eq. 13-14) ---------------------------------
+            if prev == 0:
+                logits = np.array([1.0,
+                                   alpha_bonding * sim_mat[i, j],
+                                   beta_form     * inter_mat[i, j]])
+                probs  = softmax(logits)           # [p00, p01, p02]
+                new    = rng.choice([0, 1, 2], p=probs)
+
+            # 2)  from BONDING  (Eq. 15)  – stays bonding
+            elif prev == 1:
+                new = 1                            # p11 = 1
+
+            # 3)  from BRIDGING  (Eq.16-17)
+            else:                                  # prev == 2
+                both_stay = (vac_t[i] == 0) and (vac_t[j] == 0)
+                p22 = sim_mat[i, j] if both_stay else gamma * sim_mat[i, j]
+                p22 = np.clip(p22, 0.0, 1.0)
+                p20 = 1.0 - p22                    # may drop to no-link
+                new = rng.choice([0, 2], p=[p20, p22])
+
+            # fill symmetric entries
+            link_new[i, j] = link_new[j, i] = new
+
+    return pd.DataFrame(link_new, index=homes, columns=homes)

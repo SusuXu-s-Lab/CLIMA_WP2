@@ -1,21 +1,24 @@
-import pdb
 from generate_household_features import generate_household_features
-from generate_household_states import generate_T0_states
+from generate_household_states import generate_T0_states, update_full_states_one_step
 import pandas as pd
 from household_features_function import compute_similarity, compute_interaction_potential
-from links_updates_fun import generate_initial_links
+from links_updates_fun import generate_initial_links, compute_p_self, compute_p_ji_linear, update_link_matrix_one_step
+import numpy as np
 from tqdm import tqdm
-import math
-import json, itertools
-
+import warnings
+warnings.filterwarnings("ignore")
 
 # Hyper parameter definition
 alpha=0.9
 beta=0.5
+gamma=0.3
 L=1
+state_dims   = ['repair_state', 'vacancy_state', 'sales_state']
+T            = 24          # total horizon (t = 0 … T-1  →  produce T steps of NEW state)
+
 
 '''
-Read real Household Features
+Read real Household Nodes
 '''
 # Read T=0 partially observed social links
 df_ori = pd.read_csv('household_swinMaryland_20190101.csv')
@@ -29,15 +32,18 @@ home2 = df_ori[['home_2']].rename(columns={'home_2': 'home'})
 house_df = pd.concat([home1, home2], ignore_index=True).drop_duplicates(subset='home')
 house_df = house_df.dropna()
 
+
 '''
 Household Feautres Generation
 '''
 house_df_with_features = generate_household_features(house_df)
 
+
 '''
 T=0 Household States Generation
 '''
 house_states=generate_T0_states(house_df_with_features,24)
+
 
 '''
 T=0 Household Similarity and Intercation Potential
@@ -46,107 +52,114 @@ T=0 Household Similarity and Intercation Potential
 similarity_df = compute_similarity(house_df_with_features)
 interaction_df = compute_interaction_potential(house_df_with_features, house_states, t=0)
 
+
 '''
 T=0 Links Generation
 '''
 # Generate initial link matrix using t=0 similarity and interaction matrices
 initial_links_df = generate_initial_links(similarity_df, interaction_df, alpha_0=alpha, beta_0=beta)
 
-import numpy as np
+# # k: state dimension (0=repair, 1=vacancy, 2=sales)
+# # t: timestep
+# t = 0
+# k = 0
+# ## Compute p_self^k_i(t)
+# p_self_series = compute_p_self(house_df_with_features.set_index('home'), house_states, t, k, L=L)
+#
+# ## Compute p_(ij)^k(t)
+# p_ij_series = compute_p_ji_linear(initial_links_df, house_df_with_features, house_states,t, k,L=L)
+#
+# ### Compute p_(ij)^k(t)
+# house_states=update_full_states_one_step(house_states, p_self_series,p_ij_series, initial_links_df,0, 0)
+#
+# ## Update links_df when t>0
+# new_link_df=update_link_matrix_one_step(similarity_df, interaction_df, initial_links_df,house_states,0,alpha_bonding=alpha,beta_form=beta,gamma=gamma)
 
-def compute_p_self(house_df, full_state_df, t, k, L=3):
-    """
-    Compute p_self^k_i(t) for each household i using linear features + sigmoid.
+# ---- helper: compute similarity / interaction for new t if features vary ----
 
-    Args:
-        house_df: DataFrame with static features, indexed by 'home'
-        full_state_df: DataFrame of all states across time
-        t: current time step
-        k: state dimension (0=repair, 1=vacancy, 2=sales)
-        L: number of past steps to consider
+# ---- store link matrices for each t (t index aligned with "time") ----------
+link_snapshots = {0: initial_links_df.copy()}
 
-    Returns:
-        Series of p_self^k_i(t), indexed by household ID
-    """
-    x_i = house_df[['income', 'age', 'race']].copy()
-    state_cols = ['repair_state', 'vacancy_state', 'sales_state']
-    non_k_cols = [col for i, col in enumerate(state_cols) if i != k]
+# ---------------- main simulation loop (t = 0 … T-1) -----------------------
+for t in tqdm(range(T - 1)):              # we already have states at t, produce t+1
+    print(f'--- sim step  {t}  →  {t+1} ---')
 
-    # Collect state history from t-L to t-1
-    frames = []
-    for delta in range(1, L + 1):
-        time_lookup = t - delta
-        if time_lookup >= 0:
-            df_slice = full_state_df[full_state_df['time'] == time_lookup].copy()
-        else:
-            df_slice = pd.DataFrame(columns=['home', 'time'] + state_cols)
-        frames.append(df_slice)
+    # -------------------------------------------------
+    # state-update for each dimension k ∈ {0,1,2}
+    # -------------------------------------------------
+    for k, k_col in enumerate(state_dims):
 
-    state_hist_df = pd.concat(frames, ignore_index=True)
-    s_mean = state_hist_df.groupby('home')[non_k_cols].mean()
+        # --- compute p_self and p_ji for current (t, k) ---------------------
+        p_self = compute_p_self(
+            house_df_with_features.set_index('home'),
+            house_states,
+            t=t,
+            k=k,
+            L=L
+        )
 
-    # Combine features
-    x_all = pd.concat([x_i, s_mean], axis=1)
-    x_all['time'] = t
-    x_all = x_all.fillna(0)
+        p_ji = compute_p_ji_linear(
+            link_snapshots[t],                # links at time t
+            house_df_with_features,
+            house_states,
+            t=t,
+            k=k,
+            L=L
+        )
 
-    weights = np.array([1.0, 0.5, 0.5, -0.8, -0.8, 0.01])  # shape (6,)
-    dot = x_all.values @ weights
-    p_self = 1 / (1 + np.exp(-dot))
+        # --- update states (writes into time t+1 row) -----------------------
+        house_states = update_full_states_one_step(
+            house_states,                     # full long table
+            p_self,
+            p_ji,
+            link_snapshots[t],                # links at t
+            t=t,
+            k=k
+        )
 
-    return pd.Series(p_self, index=x_all.index)
+    # -------------------------------------------------
+    # link-transition   G_t  →  G_{t+1}
+    # -------------------------------------------------
+    # similarity / interaction may be time-varying; here we fetch for step t
+    sim_t = compute_similarity(house_df_with_features)
+    inter_t = compute_interaction_potential(house_df_with_features, house_states, t=t)
 
+    link_next = update_link_matrix_one_step(
+        sim_t,
+        inter_t,
+        link_snapshots[t],                    # G_t
+        house_states,
+        t=t,
+        alpha_bonding=alpha,
+        beta_form=beta,
+        gamma=gamma
+    )
 
-def compute_p_ji(link_df, house_df, state_df, similarity_df, interaction_df, k):
-    """
-    Compute p_ji^k(t) for all (i, j) pairs with links, using linear feature + sigmoid.
+    link_snapshots[t + 1] = link_next        # store snapshot for next step
 
-    Args:
-        link_df: DataFrame of current links (values in {0,1,2})
-        house_df: household static features
-        state_df: current state (repair/vacancy/sales)
-        similarity_df: precomputed similarity matrix
-        interaction_df: precomputed interaction matrix
-        k: target state dimension
+# ---------------------------------------------------------------------------
+# after loop:  merge link snapshots & export results
+# ---------------------------------------------------------------------------
 
-    Returns:
-        Dictionary of {(j, i): p_ji^k(t)} for all linked (j, i)
-    """
-    homes = house_df['home'].tolist()
-    home_idx = {h: i for i, h in enumerate(homes)}
-    s_k = state_df.set_index('home')[['repair_state', 'vacancy_state', 'sales_state']].values[:, k]
-    p_ji_dict = {}
+# 1. flatten link matrices into long format
+link_records = []
+for tt, g_df in link_snapshots.items():
+    g_upper = g_df.where(np.triu(np.ones(g_df.shape), k=1).astype(bool))
+    g_long  = g_upper.stack().reset_index()
+    g_long.columns = ['home_i', 'home_j', 'link_type']
+    g_long['time'] = tt
+    link_records.append(g_long)
 
-    for i in range(len(homes)):
-        for j in range(len(homes)):
-            if i == j:
-                continue
-            link_type = link_df.iloc[i, j]
-            if link_type == 0:
-                continue
+links_long_df = pd.concat(link_records, ignore_index=True)
 
-            h_i, h_j = homes[i], homes[j]
-            demo_diff = np.abs(
-                house_df.loc[h_i, ['income', 'age', 'race']] - house_df.loc[h_j, ['income', 'age', 'race']])
-            f_ij = demo_diff.values
-            s_jk = s_k[j]
-            s_ik = s_k[i]
-            dist_ij = 1 - similarity_df.iloc[i, j]  # approximate inverse similarity
-            inter_ij = interaction_df.iloc[i, j]
+# 2. house_states already accumulated; ensure ordering
+house_states = house_states.sort_values(['time', 'home']).reset_index(drop=True)
 
-            # Feature vector: [demo_diff, s_jk, s_ik, link_type, dist_ij, interaction]
-            features = np.concatenate([f_ij, [s_jk, s_ik, link_type, dist_ij, inter_ij]])
-            weights = np.array([-2, -1, -1, 1.2, -1.2, 0.5, -0.5, 1.0])  # hand-defined
-            score = np.dot(features, weights)
-            p = 1 / (1 + np.exp(-score))
-            p_ji_dict[(j, i)] = p
+# ---------------------------------------------------------------------------
+#   house_states  –  full T×N×3 node-state table
+#   links_long_df –  full (T × |E|) link-type evolution table
+# ---------------------------------------------------------------------------
 
-    return p_ji_dict
-
-### Compute p_self^k_i(t)
-# k: state dimension (0=repair, 1=vacancy, 2=sales)
-t = 0
-k = 0
-
-p_self_series = compute_p_self(house_df_with_features.set_index('home'), house_states, t, k, L=1)
-pdb.set_trace()
+print("Simulation finished.")
+print("house_states shape :", house_states.shape)
+print("links_long_df shape:", links_long_df.shape)
