@@ -21,9 +21,9 @@ Output → DataFrame columns:
 
 | State column       | Generation rule (deterministic parameters shown) |
 |--------------------|--------------------------------------------------|
-| **repair_state**   | Allowed **only if `damage_level` > 0**. Activation probability: `p = 0.2 + 0.6 × damage` (capped at 1). Sample Bernoulli for each household. |
-| **vacancy_state**  | Compute community-level mean damage `d̄_c`. Probability: `p = 0.03 + 0.20 × d̄_c` (max 0.30). |
-| **sales_state**    | Same damage driver but steeper: `p = 0.05 + 0.30 × d̄_c` (max 0.30). |
+| repair_state   | Allowed **only if `damage_level` > 0**. Activation probability: `p = 0.2 + 0.6 × damage` (capped at 1). Sample Bernoulli for each household. |
+| vacancy_state  | Compute community-level mean damage `d̄_c`. Probability: `p = 0.03 + 0.20 × d̄_c` (max 0.30). |
+| sales_state    | Same damage driver but steeper: `p = 0.05 + 0.30 × d̄_c` (max 0.30). |
 
 All three states obey **irreversibility**: once set to 1 at time `t = 0`, they remain 1 in all future steps.  
 For `t > 0`, states are pre-filled as zero; they will be updated dynamically by the FR-SIC diffusion model during simulation.
