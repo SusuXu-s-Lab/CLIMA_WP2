@@ -119,7 +119,7 @@ DataFrame shape: (N_households × N_households)
 This initialization aligns with the model’s probabilistic link formation assumption at \(t=0\), serving as the foundation for subsequent link evolution governed by Eq. (15)–(17).
 
 
-### T > 0 Link Transition
+### Link Transition
 
 At each timestep \( t > 0 \), the link matrix \( G_t \) evolves from the previous matrix \( G_{t-1} \) based on the diffusion-aware transition model described in Equations (13)–(17) of the formulation.
 
@@ -128,32 +128,15 @@ The transition logic depends on:
 - Pairwise interaction potential
 - Dynamic node states (particularly `vacancy_state`)
 
----
-
-#### Link Transition Rules
+## Link Transition Rules
 
 | Previous Link Type: ℓᵢⱼ(t−1) | Transition Mechanism |
 |------------------------------------------|-----------------------|
 | **0 (no link)**      | Use softmax over logits, same as it is when T=0 |
 | **1 (bonding)**      | Always preserved: \( p_{11} = 1 \). |
-| **2 (bridging)**     | If both `i` and `j` are not vacant → retain with probability `similarity(i,j)`. Otherwise decay using `γ × similarity(i,j)`. Sample from \{0, 2\}. |
-
----
-
-### Implementation Steps
-
-| Step | Description |
-|------|-------------|
-| **1** | Extract `similarity(i, j)` and `interaction_potential(i, j)` matrices from time `t`. |
-| **2** | Extract `vacancy_state` from `house_states` at time `t`. |
-| **3** | For each unordered pair \((i, j)\), determine prior link type \(\ell_{ij}(t{-}1)\) and apply the corresponding transition rule. |
-| **4** | Sample next link type using either softmax or Bernoulli as needed, and update both \((i, j)\) and \((j, i)\) entries in the link matrix. |
-
-The full transition logic is implemented in `update_link_matrix_one_step(...)`, and the resulting matrix is symmetric and aligned with the evolving household states.
+| **2 (bridging)**     | If both `i` and `j` are not vacant → retain with probability `similarity(i,j)`. Otherwise decay using `γ × similarity(i,j)`. |
 
 ```python
 # Output: link_matrix[i][j] ∈ {0, 1, 2}
 DataFrame shape: (N_households × N_households)
 ```
-
-This transition step ensures that the structure of the network co-evolves with household-level dynamics, enabling link formation, persistence, and decay consistent with the assumptions in the paper.
