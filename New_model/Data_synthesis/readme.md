@@ -89,3 +89,32 @@ weights = np.array([-2.0, -1.0, -1.0,     # f_ij part
 DataFrame: interaction_potential[i][j] in (0,1)
 ```
 
+### T = 0 Link Matrix Generation
+
+The initial social network \( G_0 \) is generated using a **softmax-based categorical sampling** strategy as described in Equation (13)–(14) of the formulation. Each unordered household pair \((i, j)\) has a chance to form one of three link types:
+
+- `0`: no link  
+- `1`: bonding link (demographic-based affinity)  
+- `2`: bridging link (interaction-based potential)  
+
+---
+
+The link assignment follows this procedure:
+
+| Step | Description |
+|------|-------------|
+| **1** | Iterate all unordered household pairs \((i < j)\), extract their `similarity(i, j)` and `interaction_potential(i, j)` values. |
+| **2** | Construct softmax logits `[1.0, α₀ × similarity, β₀ × interaction]`. Here, `1.0` is the base score for no-link, and α₀, β₀ are configurable weights (default: 0.9 and 0.5). |
+| **3** | Apply softmax over the 3 logits to obtain `[p₀₀, p₀₁, p₀₂]`, the probabilities of assigning no-link, bonding, or bridging. |
+| **4** | Sample link type using a categorical distribution with these probabilities. |
+| **5** | Fill a symmetric \(N \times N\) matrix where entry `(i,j)` and `(j,i)` are set to the sampled link type. |
+
+The result is a symmetric adjacency matrix representing the initial state of the network, where links emerge probabilistically according to household similarity and interaction potential.
+
+```python
+# Output: link_matrix[i][j] ∈ {0, 1, 2}
+DataFrame shape: (N_households × N_households)
+```
+
+This initialization aligns with the model’s probabilistic link formation assumption at \(t=0\), serving as the foundation for subsequent link evolution governed by Eq. (15)–(17).
+
