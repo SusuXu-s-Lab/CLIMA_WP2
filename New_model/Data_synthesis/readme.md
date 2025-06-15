@@ -84,11 +84,10 @@ weights = np.array([-2.0, -1.0, -1.0,     # f_ij part
 DataFrame: interaction_potential[i][j] in (0,1)
 ```
 
-
-
-### 6 Link Transition
+### 5 Link Transition
 
 **T=0 Links Generation**
+
 The initial social network \( G_0 \) is generated using a **softmax-based categorical sampling** strategy as described in Equation (13)–(14) of the formulation. Each unordered household pair \((i, j)\) has a chance to form one of three link types:
 
 - `0`: no link  
@@ -121,15 +120,15 @@ The link assignment follows this procedure:
 DataFrame shape: (N_households × N_households)
 ```
 
-### Activation Probabilities: p_self and p_ji
+### 6 Self & Neighbor Activation Probabilities
+
+**Activation Probabilities: p_self and p_ji**
 
 These two components govern the node-level activation probability used in the model:
 
 ```
 P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) * ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(t))
 ```
-
-### Self & Neighbor Activation Probabilities
 
 | Probability        | Generation logic |
 |--------------------|------------------|
@@ -138,7 +137,7 @@ P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) * ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(t
 
 ---
 
-### p_self_i^k(t) — Self-Activation Propensity
+# p_self_i^k(t) — Self-Activation Propensity
 
 **Feature Inputs (per household):**
 
