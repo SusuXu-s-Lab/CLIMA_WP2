@@ -1,4 +1,4 @@
-### 1 Household Features Generation  
+## 1 Household Features Generation  
 
 | Synthesised column | Generation logic (concise but explicit) |
 |--------------------|------------------------------------------|
@@ -17,7 +17,7 @@ Output → DataFrame columns:
  'damage_level', 'population_scaled', 'age', 'race']
 ```
 
-### 2 T = 0 Household-State Generation
+## 2 T = 0 Household-State Generation
 
 | State column       | Generation rule (deterministic parameters shown) |
 |--------------------|--------------------------------------------------|
@@ -33,7 +33,7 @@ For `t > 0`, states are pre-filled as zero; they will be updated dynamically by 
 ['home', 'time', 'repair_state', 'vacancy_state', 'sales_state']
 ```
 
-### 3 Similarity Matrix Construction
+## 3 Similarity Matrix Construction
 
 Pairwise household similarity is computed using the exponential kernel defined in Equation (18) of the formulation:
 
@@ -57,7 +57,7 @@ This similarity matrix is static across time in the current setup.
 DataFrame shape: (N_households × N_households)
 ```
 
-### 4 Interaction Potential Matrix Construction for each T
+## 4 Interaction Potential Matrix Construction for each T
 
 Interaction potential between households is computed using a linearised version of the formulation's Equation (19), combining demographic difference, social state vectors, and geodesic distance:
 
@@ -84,7 +84,7 @@ weights = np.array([-2.0, -1.0, -1.0,     # f_ij part
 DataFrame: interaction_potential[i][j] in (0,1)
 ```
 
-### 5 Link Transition
+## 5 Link Transition
 
 **T=0 Links Generation**
 
@@ -120,7 +120,7 @@ The link assignment follows this procedure:
 DataFrame shape: (N_households × N_households)
 ```
 
-### 6 Self & Neighbor Activation Probabilities
+## 6 Self & Neighbor Activation Probabilities
 
 **Activation Probabilities: p_self and p_ji**
 
@@ -137,7 +137,7 @@ P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) * ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(t
 
 ---
 
-# p_self_i^k(t) — Self-Activation Propensity
+### p_self_i^k(t) — Self-Activation Propensity
 
 **Feature Inputs (per household):**
 
