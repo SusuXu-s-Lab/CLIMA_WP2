@@ -107,7 +107,7 @@ The link assignment follows this procedure:
 | **2** | Construct softmax logits `[1.0, α₀ × similarity, β₀ × interaction]`. Here, `1.0` is the base score for no-link, and α₀, β₀ are configurable weights (default: 0.9 and 0.5). |
 | **3** | Apply softmax over the 3 logits to obtain `[p₀₀, p₀₁, p₀₂]`, the probabilities of assigning no-link, bonding, or bridging. |
 | **4** | Sample link type using a categorical distribution with these probabilities. |
-| **5** | Fill a symmetric \(N \times N\) matrix where entry `(i,j)` and `(j,i)` are set to the sampled link type. |
+| **5** | Fill a symmetric \(N × N\) matrix where entry `(i,j)` and `(j,i)` are set to the sampled link type. |
 
 The result is a symmetric adjacency matrix representing the initial state of the network, where links emerge probabilistically according to household similarity and interaction potential.
 
