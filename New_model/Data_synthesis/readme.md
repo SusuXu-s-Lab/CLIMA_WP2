@@ -151,7 +151,7 @@ P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) × ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(
 
 ---
 
-### `p_self^k_i(t)` – Self-Activation Propensity
+### `$p_self^k_i(t)$` – Self-Activation Propensity
 
 This term captures the probability that household *i* independently chooses to activate for decision dimension *k* at time *t*, based on its static features and recent state history.
 
