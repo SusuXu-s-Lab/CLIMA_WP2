@@ -178,6 +178,9 @@ weights  = np.concatenate([w_static, w_hist, w_time])
 ### p_ji^k(t) — Neighbor Influence Probability
 
 This term represents the influence of household j on i (along decision dimension k), conditioned on a link existing from j to i (i.e. link_ji(t) > 0).
+```
+p_self_i^k(t) = sigmoid( w · [f_demo, hist_src, hist_tgt, link_feat, geo_dist] )
+```
 
 **Feature Inputs (per directed pair j → i):**
 
