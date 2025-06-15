@@ -141,51 +141,52 @@ The transition logic depends on:
 DataFrame shape: (N_households × N_households)
 ```
 
-### Activation Probability: `p_self` and `p_ji`
+### Activation Probabilities: p_self and p_ji
 
-These two components jointly determine the node-level activation probability defined in Equation (2) of the formulation:
+These two components govern the node-level activation probability used in the model:
 
 ```
-P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) × ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(t))
+P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) * ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(t))
 ```
 
 ---
 
-### `$p_self^k_i(t)$` – Self-Activation Propensity
+### p_self_i^k(t) — Self-Activation Propensity
 
-This term captures the probability that household *i* independently chooses to activate for decision dimension *k* at time *t*, based on its static features and recent state history.
+This term represents the probability that household i activates decision dimension k at time t independently (i.e. without neighbor influence).
 
-| Feature Inputs (per household) | Description |
-|-------------------------------|-------------|
-| `income`, `age`, `race`       | Demographic attributes from `house_df_with_features` |
-| `s_i^{-k}(t-L:t-1)`           | Historical average of non-*k* states (e.g. sales, vacancy if *k=repair*) over last *L* steps |
-| `time`                        | Current time step, treated as an additional feature |
+**Feature Inputs (per household):**
 
-A weighted linear combination of these features is passed through a sigmoid function to obtain \(p_{\text{self},i}^k(t)\). This corresponds to a simple 1-layer neural network approximation.
+| Feature              | Description |
+|----------------------|-------------|
+| income, age, race    | From static household attributes |
+| s_i^{-k}(t-L : t-1)  | Mean of household's past L-step non-k states |
+| time                 | Current timestep (numeric) |
+
+A linear combination of these features is passed through a sigmoid to yield `p_self_i^k(t)`, simulating a single-layer neural net.
 
 ---
 
-### `p_ji^k(t)` – Neighbor Influence Probability
+### p_ji^k(t) — Neighbor Influence Probability
 
-This term captures the influence of household *j* on household *i* along decision dimension *k*, provided there is a current link \(\ell_{ji}(t) > 0\).
+This term represents the influence of household j on i (along decision dimension k), conditioned on a link existing from j to i (i.e. link_ji(t) > 0).
 
-| Feature Inputs (per pair j→i) | Description |
-|-------------------------------|-------------|
-| `|demo_j - demo_i|`           | Elementwise absolute difference of `income`, `age`, `race` |
-| `s_j^{-k}(t-L:t-1)`           | Flattened state history vector (length `2L`) of source *j* |
-| `s_i^{-k}(t-L:t-1)`           | Flattened state history of target *i* |
-| `link_type`                  | Current link type (1=bonding, 2=bridging) |
-| `dist_ij`                    | Geographic distance (meters) based on decoded geohash |
+**Feature Inputs (per directed pair j → i):**
 
-These features are combined into a pairwise tensor of shape `(N, N, D)`, then passed through a linear weight vector followed by sigmoid to compute \(p_{ji}^k(t)\). Influence is masked for non-linked or self pairs.
+| Feature              | Description |
+|----------------------|-------------|
+| abs(demo_j - demo_i) | Absolute difference of income, age, race |
+| s_j^{-k}(t-L : t-1)  | Flattened state history of source j (length 2L) |
+| s_i^{-k}(t-L : t-1)  | Flattened state history of target i (length 2L) |
+| link_type            | 1 = bonding, 2 = bridging |
+| dist_ij              | Geodesic distance (meters) from geohash decoding |
+
+Each pair's combined feature vector is passed through a linear scoring layer followed by a sigmoid, producing the final influence probability `p_ji^k(t)`.
 
 ```python
-# Output:
-# p_self^k_i(t):  Series indexed by home
-# p_ji^k(t):      DataFrame (N_households × N_households)
+# Outputs:
+# p_self_i^k(t): Series indexed by home ID
+# p_ji^k(t):     DataFrame (N × N), symmetric, 0 for unlinked or self-pairs
 ```
 
-This pair of probabilities governs the FR-SIC diffusion mechanism that updates household states during simulation.
-
-
-
+These values are then inserted into the FR-SIC update rule to simulate node activation under the influence of both internal and external pressures.
