@@ -111,8 +111,6 @@ The result is a symmetric adjacency matrix representing the initial state of the
 DataFrame shape: (N_households × N_households)
 ```
 
-This initialization aligns with the model’s probabilistic link formation assumption at \(t=0\), serving as the foundation for subsequent link evolution governed by Eq. (15)–(17).
-
 
 ### Link Transition
 
