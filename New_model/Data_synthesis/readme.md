@@ -72,7 +72,7 @@ interaction_potential(i, j, t) = sigmoid( wᵀ · [f_ij(t), s_i(t), s_j(t), dist
 
 | Step | Description |
 |------|-------------|
-| **1** | Extract absolute demographic differences: `f_ij(t)`` = |demo_i - demo_j|`, where `demo` includes `income`, `age`, `race`. Shape: *(N, N, 3)* |
+| **1** | Extract absolute demographic differences: ``f_ij(t) = |demo_i - demo_j|`, where `demo` includes `income`, `age`, `race`. Shape: *(N, N, 3)*` |
 | **2** | Extract household state vectors `s_i(t)` and `s_j(t)` for all nodes at time `t`. Shape: *(N, N, 3)* for each. |
 | **3** | Decode geohash and compute true geodesic distance (meters) between each pair → `dist_ij`, reshaped to *(N, N, 1)*. |
 | **4** | Concatenate feature vectors for each household pair:  
