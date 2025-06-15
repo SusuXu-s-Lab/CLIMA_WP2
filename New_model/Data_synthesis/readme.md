@@ -66,7 +66,7 @@ Pairwise interaction potential between households is computed following Equation
 
 The model uses a linearized surrogate for `NN_form`, combining demographic distance, social state, and geographic distance:
 
-```text
+```
 interaction_potential(i, j, t) = sigmoid( wᵀ · [f_ij(t), s_i(t), s_j(t), dist_ij] )
 ```
 
@@ -76,11 +76,11 @@ interaction_potential(i, j, t) = sigmoid( wᵀ · [f_ij(t), s_i(t), s_j(t), dist
 | **2** | Extract household state vectors `s_i(t)` and `s_j(t)` for all nodes at time `t`. Shape: *(N, N, 3)* for each. |
 | **3** | Decode geohash and compute true geodesic distance (meters) between each pair → `dist_ij`, reshaped to *(N, N, 1)*. |
 | **4** | Concatenate feature vectors for each household pair:  
-`[f_ij, s_i, s_j, dist_ij]` → total length = 10. |
-| **5** | Apply fixed linear weights over feature vector:  
+  `[f_ij, s_i, s_j, dist_ij]` → total length = 10. |
+| **5** | Apply fixed linear weights over the feature vector:  
     - Strong negative weights on dissimilarity and distance  
     - Mild negative weights on state mismatch  
-    - Final score passed through sigmoid to get probability in (0, 1) |
+    - Final score passed through `sigmoid` to get probability in (0, 1) |
 
 The resulting interaction potential matrix is symmetric and dynamic—recomputed at each time step `t` based on the current node states.
 
