@@ -1,4 +1,4 @@
-### Household Features Generation  
+## 1 Household Features Generation  
 
 | Synthesised column | Generation logic (concise but explicit) |
 |--------------------|------------------------------------------|
@@ -17,7 +17,7 @@ Output → DataFrame columns:
  'damage_level', 'population_scaled', 'age', 'race']
 ```
 
-### T = 0 Household-State Generation
+## 2 T = 0 Household-State Generation
 
 | State column       | Generation rule (deterministic parameters shown) |
 |--------------------|--------------------------------------------------|
@@ -33,7 +33,7 @@ For `t > 0`, states are pre-filled as zero; they will be updated dynamically by 
 ['home', 'time', 'repair_state', 'vacancy_state', 'sales_state']
 ```
 
-### Similarity Matrix Construction
+## 3 Similarity Matrix Construction
 
 Pairwise household similarity is computed using the exponential kernel defined in Equation (18) of the formulation:
 
@@ -57,7 +57,7 @@ This similarity matrix is static across time in the current setup.
 DataFrame shape: (N_households × N_households)
 ```
 
-### Interaction Potential Matrix Construction for each T
+## 4 Interaction Potential Matrix Construction for each T
 
 Interaction potential between households is computed using a linearised version of the formulation's Equation (19), combining demographic difference, social state vectors, and geodesic distance:
 
@@ -84,7 +84,9 @@ weights = np.array([-2.0, -1.0, -1.0,     # f_ij part
 DataFrame: interaction_potential[i][j] in (0,1)
 ```
 
-### T = 0 Link Matrix Generation
+## 5 Link Transition
+
+**T=0 Links Generation**
 
 The initial social network \( G_0 \) is generated using a **softmax-based categorical sampling** strategy as described in Equation (13)–(14) of the formulation. Each unordered household pair \((i, j)\) has a chance to form one of three link types:
 
@@ -104,22 +106,6 @@ The link assignment follows this procedure:
 | **4** | Sample link type using a categorical distribution with these probabilities. |
 | **5** | Fill a symmetric \(N × N\) matrix where entry `(i,j)` and `(j,i)` are set to the sampled link type. |
 
-The result is a symmetric adjacency matrix representing the initial state of the network, where links emerge probabilistically according to household similarity and interaction potential.
-
-```python
-# Output: link_matrix[i][j] ∈ {0, 1, 2}
-DataFrame shape: (N_households × N_households)
-```
-
-
-### Link Transition
-
-At each timestep \( t > 0 \), the link matrix \( G_t \) evolves from the previous matrix \( G_{t-1} \) based on the diffusion-aware transition model described in Equations (13)–(17) of the formulation.
-
-The transition logic depends on:
-- Node similarity (demographic and spatial)
-- Pairwise interaction potential
-- Dynamic node states (particularly `vacancy_state`)
 
 **Link Transition Rules:**
 
@@ -134,15 +120,15 @@ The transition logic depends on:
 DataFrame shape: (N_households × N_households)
 ```
 
-### Activation Probabilities: p_self and p_ji
+## 6 Self & Neighbor Activation Probabilities
+
+**Activation Probabilities: p_self and p_ji**
 
 These two components govern the node-level activation probability used in the model:
 
 ```
 P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) * ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(t))
 ```
-
-### Self & Neighbor Activation Probabilities
 
 | Probability        | Generation logic |
 |--------------------|------------------|
