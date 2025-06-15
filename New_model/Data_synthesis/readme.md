@@ -140,3 +140,52 @@ The transition logic depends on:
 # Output: link_matrix[i][j] ∈ {0, 1, 2}
 DataFrame shape: (N_households × N_households)
 ```
+
+### Activation Probability: `p_self` and `p_ji`
+
+These two components jointly determine the node-level activation probability defined in Equation (2) of the formulation:
+
+```
+P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) × ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(t))
+```
+
+---
+
+### `p_self^k_i(t)` – Self-Activation Propensity
+
+This term captures the probability that household *i* independently chooses to activate for decision dimension *k* at time *t*, based on its static features and recent state history.
+
+| Feature Inputs (per household) | Description |
+|-------------------------------|-------------|
+| `income`, `age`, `race`       | Demographic attributes from `house_df_with_features` |
+| `s_i^{-k}(t-L:t-1)`           | Historical average of non-*k* states (e.g. sales, vacancy if *k=repair*) over last *L* steps |
+| `time`                        | Current time step, treated as an additional feature |
+
+A weighted linear combination of these features is passed through a sigmoid function to obtain \(p_{\text{self},i}^k(t)\). This corresponds to a simple 1-layer neural network approximation.
+
+---
+
+### `p_ji^k(t)` – Neighbor Influence Probability
+
+This term captures the influence of household *j* on household *i* along decision dimension *k*, provided there is a current link \(\ell_{ji}(t) > 0\).
+
+| Feature Inputs (per pair j→i) | Description |
+|-------------------------------|-------------|
+| `|demo_j - demo_i|`           | Elementwise absolute difference of `income`, `age`, `race` |
+| `s_j^{-k}(t-L:t-1)`           | Flattened state history vector (length `2L`) of source *j* |
+| `s_i^{-k}(t-L:t-1)`           | Flattened state history of target *i* |
+| `link_type`                  | Current link type (1=bonding, 2=bridging) |
+| `dist_ij`                    | Geographic distance (meters) based on decoded geohash |
+
+These features are combined into a pairwise tensor of shape `(N, N, D)`, then passed through a linear weight vector followed by sigmoid to compute \(p_{ji}^k(t)\). Influence is masked for non-linked or self pairs.
+
+```python
+# Output:
+# p_self^k_i(t):  Series indexed by home
+# p_ji^k(t):      DataFrame (N_households × N_households)
+```
+
+This pair of probabilities governs the FR-SIC diffusion mechanism that updates household states during simulation.
+
+
+
