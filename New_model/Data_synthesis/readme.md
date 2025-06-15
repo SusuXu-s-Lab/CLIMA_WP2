@@ -9,7 +9,7 @@
 | **`age`** | Each community is labelled **old / young / mixed** with probs 0.3 / 0.3 / 0.4. Household age ~ `Normal(0.8, 0.05)` (old), `Normal(0.2, 0.05)` (young) or `Normal(0.5, 0.1)` (mixed); clip 0–1. |
 | **`race`** | Numeric encoding {0 = White, 0.25 = Black, 0.5 = Hispanic, 1 = Asian}. **80 %** communities are White-dominant (0); the rest choose a random non-white dominant. For each household, sample race with weight **0.7** on the dominant code and **0.1** on the others. |
 
-All features are scaled/encoded in \([0,1]\) or discrete numeric levels, matching the formulation’s requirement that \(x_i(t)\) be readily fed into the neural components and distance metrics.
+All features are scaled/encoded in \([0,1]\) or discrete numeric levels.
 
 ```bash
 Output → DataFrame columns:
