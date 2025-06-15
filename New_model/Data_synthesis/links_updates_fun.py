@@ -33,45 +33,59 @@ def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.
 
 def compute_p_self(house_df, full_state_df, t, k, L=3):
     """
-    Compute p_self^k_i(t) for each household i using linear features + sigmoid.
+    Compute p_self^k_i(t) using static features + full unfolded state history.
 
     Args:
         house_df: DataFrame with static features, indexed by 'home'
-        full_state_df: DataFrame of all states across time
-        t: current time step
-        k: state dimension (0=repair, 1=vacancy, 2=sales)
-        L: number of past steps to consider
+        full_state_df: DataFrame with all states across time
+        t: Current time step
+        k: Decision dimension (0=repair, 1=vacancy, 2=sales)
+        L: History window length
 
     Returns:
-        Series of p_self^k_i(t), indexed by household ID
+        Series of p_self_i^k(t), indexed by home ID
     """
-    x_i = house_df[['income', 'age', 'race']].copy()
     state_cols = ['repair_state', 'vacancy_state', 'sales_state']
-    non_k_cols = [col for i, col in enumerate(state_cols) if i != k]
+    non_k_cols = [col for i, col in enumerate(state_cols) if i != k]  # length 2
+    homes = house_df.index.tolist()
+    N = len(homes)
+    idx_map = {h: i for i, h in enumerate(homes)}
 
-    # Collect state history from t-L to t-1
-    frames = []
-    for delta in range(1, L + 1):
-        time_lookup = t - delta
-        if time_lookup >= 0:
-            df_slice = full_state_df[full_state_df['time'] == time_lookup].copy()
-        else:
-            df_slice = pd.DataFrame(columns=['home', 'time'] + state_cols)
-        frames.append(df_slice)
+    # (1) static features
+    static_feat = house_df[['income', 'age', 'race']].copy()  # (N, 3)
 
-    state_hist_df = pd.concat(frames, ignore_index=True)
-    s_mean = state_hist_df.groupby('home')[non_k_cols].mean()
+    # (2) collect past L-step non-k states
+    hist_tensor = np.zeros((N, L, len(non_k_cols)))  # shape (N, L, 2)
 
-    # Combine features
-    x_all = pd.concat([x_i, s_mean], axis=1)
-    x_all['time'] = t
-    x_all = x_all.fillna(0)
+    for offset in range(1, L + 1):
+        t_lookup = t - offset
+        if t_lookup < 0:
+            continue
+        df_slice = (full_state_df[full_state_df['time'] == t_lookup]
+                    .set_index('home')[non_k_cols])
+        for h in df_slice.index.intersection(homes):
+            hist_tensor[idx_map[h], L - offset, :] = df_slice.loc[h].values
 
-    weights = np.array([1.0, 0.5, 0.5, -0.8, -0.8, 0.01])  # shape (6,)
-    dot = x_all.values @ weights
+    hist_flat = hist_tensor.reshape(N, -1)  # shape (N, 2L)
+
+    # (3) concatenate features: [income, age, race, s^{-k}_{t-L:t-1}, time]
+    all_feat = np.concatenate([
+        static_feat.values,
+        hist_flat,
+
+    ], axis=1)  # final shape = (N, 3 + 2L + 1)
+
+    # (4) weights
+    w_static = np.array([1.0, 0.5, 0.5])             # income, age, race
+    w_hist   = np.full(2 * L, -0.8)                  # L steps of 2 non-k dims
+    weights  = np.concatenate([w_static, w_hist])/10
+
+    assert weights.shape[0] == all_feat.shape[1], "Shape mismatch in feature × weight"
+
+    # (5) sigmoid scoring
+    dot = all_feat @ weights
     p_self = 1 / (1 + np.exp(-dot))
-
-    return pd.Series(p_self, index=x_all.index)
+    return pd.Series(p_self, index=house_df.index)
 
 def compute_p_ji_linear(link_df,
                         house_df_with_features,
