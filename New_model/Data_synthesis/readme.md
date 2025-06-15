@@ -32,3 +32,29 @@ For `t > 0`, states are pre-filled as zero; they will be updated dynamically by 
 # Output columns:
 ['home', 'time', 'repair_state', 'vacancy_state', 'sales_state']
 ```
+
+### Similarity Matrix Construction
+
+Pairwise household similarity is computed using the exponential kernel defined in Equation (18) of the formulation:
+
+```text
+similarity(i, j, t) = exp( - (‖demo_i - demo_j‖² / σ_demo² + dist_ij² / σ_geo²) )
+```
+
+This reflects the assumption that closer demographic and spatial proximity leads to higher likelihood of bonding-type links.
+
+The construction proceeds as follows:
+
+| Step | Description |
+|------|-------------|
+| **1** | Extract demographic features: `income`, `age`, `race`. Compute pairwise Euclidean distance → `demo_dist`. |
+| **2** | Decode the 8-digit geohash to latitude/longitude and compute geodesic distance matrix using Haversine formula → `geo_dist` (in meters). |
+| **3** | Compute normalisation constants `σ_demo` and `σ_geo` as the median of all pairwise distances (excluding diagonals). |
+| **4** | Apply exponential kernel elementwise to get final similarity matrix (values in (0,1)). Returned as a symmetric DataFrame indexed by `home`. |
+
+This similarity matrix is static across time in the current setup, but could be recomputed per timestep if demographic features evolve.
+
+```python
+# Output: similarity[i][j] = similarity[j][i] ∈ (0,1)
+DataFrame shape: (N_households × N_households)
+```
