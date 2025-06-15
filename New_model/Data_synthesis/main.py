@@ -1,3 +1,5 @@
+import pdb
+import pygeohash as pgh
 from generate_household_features import generate_household_features
 from generate_household_states import generate_T0_states, update_full_states_one_step
 import pandas as pd
@@ -5,17 +7,18 @@ from household_features_function import compute_similarity, compute_interaction_
 from links_updates_fun import generate_initial_links, compute_p_self, compute_p_ji_linear, update_link_matrix_one_step
 import numpy as np
 from tqdm import tqdm
+import os
 import warnings
 warnings.filterwarnings("ignore")
 
 # Hyper parameter definition
-alpha=0.9
-beta=0.5
+alpha=0.001
+beta=0.001
 gamma=0.3
 L=1
-state_dims   = ['repair_state', 'vacancy_state', 'sales_state']
-T            = 24          # total horizon (t = 0 … T-1  →  produce T steps of NEW state)
-
+state_dims = ['repair_state', 'vacancy_state', 'sales_state']
+T = 24          # total horizon (t = 0 … T-1  →  produce T steps of NEW state)
+p_block=0.5 # propotion of links are randomly blocked per time step
 
 '''
 Read real Household Nodes
@@ -24,6 +27,7 @@ Read real Household Nodes
 df_ori = pd.read_csv('household_swinMaryland_20190101.csv')
 df_ori = df_ori[['home_1', 'home_2', 'home_1_number', 'home_2_number']]
 
+
 # Extract home and their locations
 home1 = df_ori[['home_1']].rename(columns={'home_1': 'home'})
 home2 = df_ori[['home_2']].rename(columns={'home_2': 'home'})
@@ -31,8 +35,7 @@ home2 = df_ori[['home_2']].rename(columns={'home_2': 'home'})
 # Merge and remove duplicates
 house_df = pd.concat([home1, home2], ignore_index=True).drop_duplicates(subset='home')
 house_df = house_df.dropna()
-
-
+house_df=house_df[:150]
 '''
 Household Feautres Generation
 '''
@@ -51,7 +54,6 @@ T=0 Household Similarity and Intercation Potential
 # Compute Similarity and Interaction Potential
 similarity_df = compute_similarity(house_df_with_features)
 interaction_df = compute_interaction_potential(house_df_with_features, house_states, t=0)
-
 
 '''
 T=0 Links Generation
@@ -161,5 +163,45 @@ house_states = house_states.sort_values(['time', 'home']).reset_index(drop=True)
 # ---------------------------------------------------------------------------
 
 print("Simulation finished.")
+
+'''
+Save Results
+'''
+folder_path = 'sysnthetic_data'
+if not os.path.exists(folder_path):
+    os.makedirs(folder_path)
+
+def block_links_per_timestep(df, p):
+    # Make a copy to avoid modifying the original DataFrame
+    df = df.copy()
+
+    # Store all indices to be blocked
+    to_block_indices = []
+
+    # Loop through each unique timestep
+    for t in df['time_step'].unique():
+        df_t = df[df['time_step'] == t]
+        n_block = int(len(df_t) * p)
+        blocked_indices = np.random.choice(df_t.index, size=n_block, replace=False)
+        to_block_indices.extend(blocked_indices)
+
+    # Drop the blocked rows
+    df_blocked = df.drop(index=to_block_indices)
+
+    return df_blocked
+
+links_long_df=links_long_df.rename(columns={'home_i': 'household_id_1','home_j': 'household_id_2','time': 'time_step'})
+house_df_with_features = house_df_with_features.rename(columns={'home': 'household_id', 'repair_state':'repair',
+                                                                'vacancy_state':'vacancy','sales_state':'sell'})
+links_long_df=links_long_df[links_long_df['link_type'] !=0]
+blocked_df = block_links_per_timestep(links_long_df, p=p_block)
+house_df['latitude'], house_df['longitude'] = zip(*house_df['home'].map(pgh.decode))
+house_df = house_df.rename(columns={'home': 'household_id'})
+house_states.to_csv('sysnthetic_data/household_states.csv',index=False)
+links_long_df.to_csv('sysnthetic_data/ground_truth_network.csv',index=False)
+blocked_df.to_csv('sysnthetic_data/observed_network.csv',index=False)
+house_df.to_csv('sysnthetic_data/household_loactions.csv',index=False)
+house_df_with_features.to_csv('sysnthetic_data/household_features.csv', index=False)
 print("house_states shape :", house_states.shape)
 print("links_long_df shape:", links_long_df.shape)
+print("links_long_df shape:", blocked_df.shape)
