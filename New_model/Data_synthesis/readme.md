@@ -17,17 +17,18 @@ Output → DataFrame columns:
  'damage_level', 'population_scaled', 'age', 'race']
 ```
 
-### T = 0 Household-State Generation  
+### T = 0 Household-State Generation
 
-| State column | Generation rule (deterministic parameters shown) | Formulation link |
-|--------------|--------------------------------------------------|------------------|
-| **`repair_state`** | Allowed **only if `damage_level` > 0**.  Activation probability:  \(\;p = 0.2 + 0.6 \times \text{damage}\;\) (capped at 1).  Sample Bernoulli for each household. | Provides initial seed set \(s_i^{\text{repair}}(0)\) for FR-SIC; probability increases with physical loss. |
-| **`vacancy_state`** | Community-level mean damage \(\bar d_c\) is first computed.  Probability:  \(p = 0.03 + 0.20 \bar d_c\) (max 0.30). | Encodes “out-migration” hotspots; feeds into bridging-link decay rule (\(\gamma\)). |
-| **`sales_state`** | Same community damage driver with steeper base:  \(p = 0.05 + 0.30 \bar d_c\) (max 0.30). | Supplies alternative irreversible state for diffusion dimension \(k=2\). |
+| State column       | Generation rule (deterministic parameters shown) |
+|--------------------|--------------------------------------------------|
+| **repair_state**   | Allowed **only if `damage_level` > 0**. Activation probability: `p = 0.2 + 0.6 × damage` (capped at 1). Sample Bernoulli for each household. |
+| **vacancy_state**  | Compute community-level mean damage `d̄_c`. Probability: `p = 0.03 + 0.20 × d̄_c` (max 0.30). |
+| **sales_state**    | Same damage driver but steeper: `p = 0.05 + 0.30 × d̄_c` (max 0.30). |
 
-All three states obey **irreversibility** (Assumption 2.4-1): once set to 1 at \(t=0\) they remain 1 for every subsequent placeholder row. For \(t>0\) rows the generator pre-fills zeros; these values will be updated during the co-evolution simulation loop by the FR-SIC process.
+All three states obey **irreversibility**: once set to 1 at time `t = 0`, they remain 1 in all future steps.  
+For `t > 0`, states are pre-filled as zero; they will be updated dynamically by the FR-SIC diffusion model during simulation.
 
 ```python
-# output columns
+# Output columns:
 ['home', 'time', 'repair_state', 'vacancy_state', 'sales_state']
 ```
