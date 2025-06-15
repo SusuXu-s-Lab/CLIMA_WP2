@@ -62,30 +62,26 @@ DataFrame shape: (N_households × N_households)
 
 ### Interaction Potential Matrix Construction
 
-Pairwise interaction potential between households is computed following Equation (19) in the formulation. This reflects the likelihood of **bridging link formation** based on feature similarity, state alignment, and spatial proximity.
+Interaction potential between households is computed using a linearised version of the formulation's Equation (19), combining demographic difference, social state vectors, and geodesic distance.
 
-The model uses a linearized surrogate for `NN_form`, combining demographic distance, social state, and geographic distance:
+The final interaction score is:
 
 ```
-interaction_potential(i, j, t) = sigmoid( wᵀ · [f_ij(t), s_i(t), s_j(t), dist_ij] )
+interaction_potential(i, j, t) = sigmoid( w · [f_ij, s_i, s_j, dist_ij] )
 ```
 
 | Step | Description |
 |------|-------------|
-| **1** | Extract absolute demographic differences: `f_ij(t) = |demo_i - demo_j|`, where `demo` includes `income`, `age`, `race`. Shape: *(N, N, 3)* |
-| **2** | Extract household state vectors `s_i(t)` and `s_j(t)` for all nodes at time `t`. Shape: *(N, N, 3)* for each. |
-| **3** | Decode geohash and compute true geodesic distance (meters) between each pair → `dist_ij`, reshaped to *(N, N, 1)*. |
-| **4** | Concatenate feature vectors for each household pair:  
-  `[f_ij, s_i, s_j, dist_ij]` → total length = 10. |
-| **5** | Apply fixed linear weights over the feature vector:  
-    - Strong negative weights on dissimilarity and distance  
-    - Mild negative weights on state mismatch  
-    - Final score passed through `sigmoid` to get probability in (0, 1) |
+| **1** | Compute `f_ij(t)` = absolute difference in `income`, `age`, `race` between household `i` and `j`. Result: shape (N, N, 3). |
+| **2** | Extract `s_i(t)` and `s_j(t)` from current `repair_state`, `vacancy_state`, `sales_state`. Each becomes shape (N, N, 3). |
+| **3** | Decode 8-digit geohash and calculate haversine distance between locations → `dist_ij` (in meters). Reshape to (N, N, 1). |
+| **4** | Concatenate `[f_ij, s_i, s_j, dist_ij]` into one 10-dimensional vector for each pair. |
+| **5** | Apply fixed linear weights, followed by sigmoid function to produce interaction potential values in (0, 1). |
 
-The resulting interaction potential matrix is symmetric and dynamic—recomputed at each time step `t` based on the current node states.
+Output is a symmetric (N × N) DataFrame. This matrix is recomputed at each time step `t` using time-varying states `s(t)`.
 
 ```python
-# Output: interaction_potential[i][j] ∈ (0,1)
-DataFrame shape: (N_households × N_households)
+# Output format:
+DataFrame: interaction_potential[i][j] in (0,1)
 ```
 
