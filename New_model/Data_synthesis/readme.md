@@ -60,7 +60,7 @@ DataFrame shape: (N_households × N_households)
 ```
 
 
-### Interaction Potential Matrix Construction
+### Interaction Potential Matrix Construction for each T
 
 Interaction potential between households is computed using a linearised version of the formulation's Equation (19), combining demographic difference, social state vectors, and geodesic distance.
 
