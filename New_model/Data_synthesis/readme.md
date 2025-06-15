@@ -149,14 +149,16 @@ These two components govern the node-level activation probability used in the mo
 P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) * ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(t))
 ```
 
+### Self & Neighbor Activation Probabilities
+
+| Probability        | Generation logic |
+|--------------------|------------------|
+| `p_self^k_i(t)`    | For each household `i`, we construct a feature vector combining static attributes (`income`, `age`, `race`) and flattened non-`k` state history over the past `L` steps (e.g., past `vacancy` and `sales` if `k=repair`). We apply a weighted linear combination followed by a sigmoid transformation. |
+| `p_{ji}^k(t)`      | For each linked pair `(j → i)`, we compute a feature vector including demographic differences, past non-`k` state history of both `j` and `i`, their link type, and their geographic distance. This vector is linearly weighted and passed through a sigmoid to yield the transmission probability. |
+
 ---
 
 ### p_self_i^k(t) — Self-Activation Propensity
-
-This term represents the probability that household *i* independently activates decision dimension *k* at time *t*, based on its static features and the full unfolded history of its other state dimensions.
-```
-p_self_i^k(t) = sigmoid( w · [demo_i, state_history_i] )
-```
 
 **Feature Inputs (per household):**
 
@@ -165,6 +167,9 @@ p_self_i^k(t) = sigmoid( w · [demo_i, state_history_i] )
 | `income`, `age`, `race`   | From static attributes of household *i* |
 | `s_i^{-k}(t-L : t-1)`     | Flattened vector of past L-step values for the two non-*k* states (length = 2 × L) |
 
+```
+p_self_i^k(t) = sigmoid( w · [demo_i, state_history_i] )
+```
 
 ```python
 w_static = np.array([1.0, 0.5, 0.5])             # income, age, race
@@ -177,11 +182,6 @@ weights  = np.concatenate([w_static, w_hist, w_time])
 
 ### p_ji^k(t) — Neighbor Influence Probability
 
-This term represents the influence of household j on i (along decision dimension k), conditioned on a link existing from j to i (i.e. link_ji(t) > 0).
-```
-p_self_i^k(t) = sigmoid( w · [f_demo, hist_src, hist_tgt, link_feat, geo_dist] )
-```
-
 **Feature Inputs (per directed pair j → i):**
 
 | Feature              | Description |
@@ -192,7 +192,9 @@ p_self_i^k(t) = sigmoid( w · [f_demo, hist_src, hist_tgt, link_feat, geo_dist] 
 | link_type            | 1 = bonding, 2 = bridging |
 | dist_ij              | Geodesic distance (meters) from geohash decoding |
 
-Each pair's combined feature vector is passed through a linear scoring layer followed by a sigmoid, producing the final influence probability `p_ji^k(t)`.
+```
+p_self_i^k(t) = sigmoid( w · [f_demo, hist_src, hist_tgt, link_feat, geo_dist] )
+```
 
 ```python
 # ---------- (4) weighted linear score ----------
@@ -202,15 +204,7 @@ w_link   = np.array([0.8])
 w_dist   = np.array([-3])
 weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist])     # (3+4L+2,)
 
-# p_ji^k(t):     DataFrame (N × N), symmetric, 0 for unlinked or self-pairs
+# p_ji^k(t):     DataFrame (N × N), symmetric, 0 for unlinked.
 ```
 
-### Self & Neighbor Activation Probabilities
-
-| Probability        | Generation logic |
-|--------------------|------------------|
-| `p_self^k_i(t)`    | For each household `i`, we construct a feature vector combining static attributes (`income`, `age`, `race`) and flattened non-`k` state history over the past `L` steps (e.g., past `vacancy` and `sales` if `k=repair`). We apply a weighted linear combination followed by a sigmoid transformation. |
-| `p_{ji}^k(t)`      | For each linked pair `(j → i)`, we compute a feature vector including demographic differences, past non-`k` state history of both `j` and `i`, their link type, and their geographic distance. This vector is linearly weighted and passed through a sigmoid to yield the transmission probability. |
-
-These probabilities govern the decision-making of each household at each time step. A household either activates (i.e., switches its state to 1) spontaneously via `p_self`, or through contagion from active neighbors via `p_ji`. The final activation probability at time `t+1` follows:
 
