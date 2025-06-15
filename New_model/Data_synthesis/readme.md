@@ -153,21 +153,22 @@ P(s_i^k(t+1) = 1) = 1 - (1 - p_self_i^k(t)) * ∏_{j ∈ A_i^k(t)} (1 - p_ji^k(t
 
 ### p_self_i^k(t) — Self-Activation Propensity
 
-This term represents the probability that household i activates decision dimension k at time t independently (i.e. without neighbor influence).
+This term represents the probability that household *i* independently activates decision dimension *k* at time *t*, based on its static features and the full unfolded history of its other state dimensions.
+```
+p_self_i^k(t) = sigmoid( w · [demo_i, state_history_i] )
+```
 
 **Feature Inputs (per household):**
 
-| Feature              | Description |
-|----------------------|-------------|
-| income, age, race    | From static household attributes |
-| s_i^{-k}(t-L : t-1)  | Mean of household's past L-step non-k states |
-| time                 | Current timestep (numeric) |
+| Feature                   | Description |
+|---------------------------|-------------|
+| `income`, `age`, `race`   | From static attributes of household *i* |
+| `s_i^{-k}(t-L : t-1)`     | Flattened vector of past L-step values for the two non-*k* states (length = 2 × L) |
 
-A linear combination of these features is passed through a sigmoid to yield `p_self_i^k(t)`, simulating a single-layer neural net.
+
 ```python
 w_static = np.array([1.0, 0.5, 0.5])             # income, age, race
 w_hist   = np.full(2 * L, -0.8)                  # L steps of 2 non-k dims
-w_time   = np.array([0.01])
 weights  = np.concatenate([w_static, w_hist, w_time])
 
 ```
