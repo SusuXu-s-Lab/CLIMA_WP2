@@ -81,6 +81,10 @@ interaction_potential(i, j, t) = sigmoid( w · [f_ij, s_i, s_j, dist_ij] )
 Output is a symmetric (N × N) DataFrame. This matrix is recomputed at each time step `t` using time-varying states `s(t)`.
 
 ```python
+weights = np.array([-2.0, -1.0, -1.0,     # f_ij part
+                        -1.0, -1.0, -1.0,     # s_i part
+                        -1.0, -1.0, -1.0,     # s_j part
+                        -10.0])              # dist_ij
 # Output format:
 DataFrame: interaction_potential[i][j] in (0,1)
 ```
