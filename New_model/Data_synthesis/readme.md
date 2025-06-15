@@ -205,4 +205,12 @@ weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist])     # (3+4L+
 # p_ji^k(t):     DataFrame (N × N), symmetric, 0 for unlinked or self-pairs
 ```
 
-These values are then inserted into the FR-SIC update rule to simulate node activation under the influence of both internal and external pressures.
+### Self & Neighbor Activation Probabilities
+
+| Probability        | Generation logic |
+|--------------------|------------------|
+| `p_self^k_i(t)`    | For each household `i`, we construct a feature vector combining static attributes (`income`, `age`, `race`) and flattened non-`k` state history over the past `L` steps (e.g., past `vacancy` and `sales` if `k=repair`). We apply a weighted linear combination followed by a sigmoid transformation. |
+| `p_{ji}^k(t)`      | For each linked pair `(j → i)`, we compute a feature vector including demographic differences, past non-`k` state history of both `j` and `i`, their link type, and their geographic distance. This vector is linearly weighted and passed through a sigmoid to yield the transmission probability. |
+
+These probabilities govern the decision-making of each household at each time step. A household either activates (i.e., switches its state to 1) spontaneously via `p_self`, or through contagion from active neighbors via `p_ji`. The final activation probability at time `t+1` follows:
+
