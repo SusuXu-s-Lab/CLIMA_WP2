@@ -132,9 +132,9 @@ The transition logic depends on:
 
 #### Link Transition Rules
 
-| Previous Link Type \( \ell_{ij}(t{-}1) \) | Transition Mechanism |
+| Previous Link Type: ℓᵢⱼ(t−1) | Transition Mechanism |
 |------------------------------------------|-----------------------|
-| **0 (no link)**      | Use softmax over logits: `[1, α × similarity(i,j), β × interaction(i,j)]` to sample from \{0, 1, 2\}. |
+| **0 (no link)**      | Use softmax over logits, same as it is when T=0 |
 | **1 (bonding)**      | Always preserved: \( p_{11} = 1 \). |
 | **2 (bridging)**     | If both `i` and `j` are not vacant → retain with probability `similarity(i,j)`.  
 Otherwise decay using `γ × similarity(i,j)`. Sample from \{0, 2\}. |
