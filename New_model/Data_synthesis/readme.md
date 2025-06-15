@@ -128,7 +128,7 @@ The transition logic depends on:
 - Pairwise interaction potential
 - Dynamic node states (particularly `vacancy_state`)
 
-**Link Transition Rules**
+**Link Transition Rules:**
 
 | Previous Link Type: ℓᵢⱼ(t−1) | Transition Mechanism |
 |------------------------------------------|-----------------------|
