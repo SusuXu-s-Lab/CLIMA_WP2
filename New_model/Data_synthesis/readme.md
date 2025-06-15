@@ -164,6 +164,13 @@ This term represents the probability that household i activates decision dimensi
 | time                 | Current timestep (numeric) |
 
 A linear combination of these features is passed through a sigmoid to yield `p_self_i^k(t)`, simulating a single-layer neural net.
+```python
+w_static = np.array([1.0, 0.5, 0.5])             # income, age, race
+w_hist   = np.full(2 * L, -0.8)                  # L steps of 2 non-k dims
+w_time   = np.array([0.01])
+weights  = np.concatenate([w_static, w_hist, w_time])
+
+```
 
 ---
 
@@ -184,8 +191,13 @@ This term represents the influence of household j on i (along decision dimension
 Each pair's combined feature vector is passed through a linear scoring layer followed by a sigmoid, producing the final influence probability `p_ji^k(t)`.
 
 ```python
-# Outputs:
-# p_self_i^k(t): Series indexed by home ID
+# ---------- (4) weighted linear score ----------
+w_demo   = np.array([-2.0, -1.5, -1.5])
+w_hist   = np.full(2 * L, -1.0)                # applies to both src & tgt
+w_link   = np.array([0.8])
+w_dist   = np.array([-3])
+weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist])     # (3+4L+2,)
+
 # p_ji^k(t):     DataFrame (N × N), symmetric, 0 for unlinked or self-pairs
 ```
 
