@@ -41,8 +41,6 @@ Pairwise household similarity is computed using the exponential kernel defined i
 similarity(i, j, t) = exp( - (‖demo_i - demo_j‖² / σ_demo² + dist_ij² / σ_geo²) )
 ```
 
-This reflects the assumption that closer demographic and spatial proximity leads to higher likelihood of bonding-type links.
-
 The construction proceeds as follows:
 
 | Step | Description |
@@ -59,12 +57,9 @@ This similarity matrix is static across time in the current setup.
 DataFrame shape: (N_households × N_households)
 ```
 
-
 ### Interaction Potential Matrix Construction for each T
 
-Interaction potential between households is computed using a linearised version of the formulation's Equation (19), combining demographic difference, social state vectors, and geodesic distance.
-
-The final interaction score is:
+Interaction potential between households is computed using a linearised version of the formulation's Equation (19), combining demographic difference, social state vectors, and geodesic distance:
 
 ```
 interaction_potential(i, j, t) = sigmoid( w · [f_ij, s_i, s_j, dist_ij] )
