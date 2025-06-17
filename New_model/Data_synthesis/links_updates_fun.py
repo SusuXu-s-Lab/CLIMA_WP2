@@ -69,16 +69,18 @@ def compute_p_self(house_df, full_state_df, t, k, L=3):
     hist_flat = hist_tensor.reshape(N, -1)  # shape (N, 2L)
 
     # (3) concatenate features: [income, age, race, s^{-k}_{t-L:t-1}, time]
+    time_feat = np.full((N, 1), t)
     all_feat = np.concatenate([
         static_feat.values,
         hist_flat,
-
+        time_feat
     ], axis=1)  # final shape = (N, 3 + 2L + 1)
 
     # (4) weights
     w_static = np.array([1.0, 0.5, 0.5])             # income, age, race
     w_hist   = np.full(2 * L, -0.8)                  # L steps of 2 non-k dims
-    weights  = np.concatenate([w_static, w_hist])/10
+    w_time = np.array([0.2])
+    weights  = np.concatenate([w_static, w_hist, w_time])/10
 
     assert weights.shape[0] == all_feat.shape[1], "Shape mismatch in feature × weight"
 
@@ -90,7 +92,7 @@ def compute_p_self(house_df, full_state_df, t, k, L=3):
 def compute_p_ji_linear(link_df,
                         house_df_with_features,
                         full_state_df,
-                        t: int,
+                        t: float,
                         k: int,
                         L: int = 3):
     """
@@ -131,13 +133,15 @@ def compute_p_ji_linear(link_df,
                                (N, N, 2 * L))  # => (N,N,2L)
     hist_tgt = np.broadcast_to(hist_flat[None, :, :],  # tgt=i，列向量
                                (N, N, 2 * L))  # => (N,N,2L)
+    time_feat = np.full((N, N, 1), t)   # (N,N,1)
 
     feat_all = np.concatenate(
         [f_demo,  # (N,N,3)
          hist_src,  # (N,N,2L)
          hist_tgt,  # (N,N,2L)
          link_feat,  # (N,N,1)
-         geo_dist[..., None]],  # (N,N,1)
+         geo_dist[..., None],
+         time_feat],  # (N,N,1)
         axis=-1)  # -> (N,N,3+4L+2)
 
     # ---------- (4) weighted linear score ----------
@@ -145,7 +149,8 @@ def compute_p_ji_linear(link_df,
     w_hist   = np.full(2 * L, -1.0)                # applies to both src & tgt
     w_link   = np.array([0.8])
     w_dist   = np.array([-3])
-    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist])     # (3+4L+2,)
+    w_time = np.array([0.3])
+    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])     # (3+4L+2,)
 
     scores = np.tensordot(feat_all, weights, axes=([-1], [0]))             # (N,N)
     p_mat  = 1.0 / (1.0 + np.exp(-scores))                                 # sigmoid

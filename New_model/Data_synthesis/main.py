@@ -35,7 +35,7 @@ home2 = df_ori[['home_2']].rename(columns={'home_2': 'home'})
 # Merge and remove duplicates
 house_df = pd.concat([home1, home2], ignore_index=True).drop_duplicates(subset='home')
 house_df = house_df.dropna()
-house_df=house_df[:150]
+house_df=house_df[:50]
 '''
 Household Feautres Generation
 '''
@@ -95,7 +95,7 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
         p_self = compute_p_self(
             house_df_with_features.set_index('home'),
             house_states,
-            t=t,
+            t=t/T,
             k=k,
             L=L
         )
@@ -104,7 +104,7 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
             link_snapshots[t],                # links at time t
             house_df_with_features,
             house_states,
-            t=t,
+            t=t/T,
             k=k,
             L=L
         )
