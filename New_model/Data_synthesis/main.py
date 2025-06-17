@@ -12,9 +12,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Hyper parameter definition
-alpha=0.001
-beta=0.001
-gamma=0.3
+alpha=0.0001
+beta=3
+gamma=0.6
 L=1
 state_dims = ['repair_state', 'vacancy_state', 'sales_state']
 T = 24          # total horizon (t = 0 … T-1  →  produce T steps of NEW state)
@@ -54,7 +54,6 @@ T=0 Household Similarity and Intercation Potential
 # Compute Similarity and Interaction Potential
 similarity_df = compute_similarity(house_df_with_features)
 interaction_df = compute_interaction_potential(house_df_with_features, house_states, t=0)
-
 '''
 T=0 Links Generation
 '''
@@ -125,7 +124,6 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
     # similarity / interaction may be time-varying; here we fetch for step t
     sim_t = compute_similarity(house_df_with_features)
     inter_t = compute_interaction_potential(house_df_with_features, house_states, t=t)
-
     link_next = update_link_matrix_one_step(
         sim_t,
         inter_t,

@@ -1,3 +1,5 @@
+import pdb
+
 import numpy as np
 from scipy.special import softmax
 import pandas as pd
@@ -12,7 +14,6 @@ def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.
     triu_indices = np.triu_indices(N, k=1)
     sim_vals = similarity_df.values[triu_indices]
     inter_vals = interaction_df.values[triu_indices]
-
     # Compute logits for each pair (3 logits: for no-link, bonding, bridging)
     logit_0 = np.ones_like(sim_vals)  # base score for "no link"
     logit_1 = alpha_0 * sim_vals      # bonding
@@ -80,7 +81,7 @@ def compute_p_self(house_df, full_state_df, t, k, L=3):
     w_static = np.array([1.0, 0.5, 0.5])             # income, age, race
     w_hist   = np.full(2 * L, -0.8)                  # L steps of 2 non-k dims
     w_time = np.array([0.2])
-    weights  = np.concatenate([w_static, w_hist, w_time])/10
+    weights  = np.concatenate([w_static, w_hist, w_time])/20
 
     assert weights.shape[0] == all_feat.shape[1], "Shape mismatch in feature × weight"
 
@@ -150,8 +151,7 @@ def compute_p_ji_linear(link_df,
     w_link   = np.array([0.8])
     w_dist   = np.array([-3])
     w_time = np.array([0.3])
-    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])     # (3+4L+2,)
-
+    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])/20     # (3+4L+2,)
     scores = np.tensordot(feat_all, weights, axes=([-1], [0]))             # (N,N)
     p_mat  = 1.0 / (1.0 + np.exp(-scores))                                 # sigmoid
 
@@ -214,23 +214,30 @@ def update_link_matrix_one_step(similarity_df: pd.DataFrame,
 
             # 1)  from NO-LINK  (Eq. 13-14) ---------------------------------
             if prev == 0:
-                logits = np.array([1.0,
+
+                logits = np.array([2.0,
                                    alpha_bonding * sim_mat[i, j],
                                    beta_form     * inter_mat[i, j]])
                 probs  = softmax(logits)           # [p00, p01, p02]
+                # print(probs)
                 new    = rng.choice([0, 1, 2], p=probs)
 
             # 2)  from BONDING  (Eq. 15)  – stays bonding
             elif prev == 1:
-                new = 1                            # p11 = 1
+                probs=[0.075,0.85,0.075]
+                new    = rng.choice([0, 1, 2], p=probs)                            # p11 = 1
 
             # 3)  from BRIDGING  (Eq.16-17)
             else:                                  # prev == 2
+                # pdb.set_trace()
                 both_stay = (vac_t[i] == 0) and (vac_t[j] == 0)
-                p22 = sim_mat[i, j] if both_stay else gamma * sim_mat[i, j]
+                p22 = beta_form*inter_mat[i, j] if both_stay else gamma * beta_form*inter_mat[i, j]
                 p22 = np.clip(p22, 0.0, 1.0)
-                p20 = 1.0 - p22                    # may drop to no-link
-                new = rng.choice([0, 2], p=[p20, p22])
+                p20 = 0.05 - p22                    # may drop to no-link
+                probs=softmax([p20, p22])
+                # print(probs)
+                # pdb.set_trace()
+                new = rng.choice([0, 2], p=probs)
 
             # fill symmetric entries
             link_new[i, j] = link_new[j, i] = new

@@ -1,3 +1,5 @@
+import pdb
+
 from scipy.spatial.distance import cdist
 import pygeohash as pgh
 from sklearn.metrics.pairwise import haversine_distances
@@ -19,8 +21,9 @@ def compute_similarity(house_df):
 
     # Step 4: similarity
     similarity = np.exp(
-        - (demo_dist ** 2 / sigma_demo ** 2 + geo_dist ** 2 / sigma_geo ** 2)
+        - 0.2*(0.2*demo_dist ** 2 / sigma_demo ** 2 + geo_dist ** 2 / sigma_geo ** 2)
     )
+    similarity /= similarity.sum(axis=1, keepdims=True)
     return pd.DataFrame(similarity, index=house_df['home'], columns=house_df['home'])
 
 # Example function to compute interaction potential matrix at time t
@@ -50,11 +53,12 @@ def compute_interaction_potential(house_df, state_df, t):
     full_feat = np.concatenate([f_ij, s_i, s_j, dist_feat], axis=2)  # (N, N, 10)
 
     # Step 5: linear scoring and sigmoid
-    weights = np.array([-2.0, -1.0, -1.0,     # f_ij part
-                        -1.0, -1.0, -1.0,     # s_i part
-                        -1.0, -1.0, -1.0,     # s_j part
-                        -10.0])/10              # dist_ij
+    weights = np.array([-2.0, -4.0, -8.0,     # f_ij part
+                        -1.0, -3.0, -1.0,     # s_i part
+                        -1.0, -5.0, -2.0,     # s_j part
+                        -5.0])/10000           # dist_ij
     dot = np.tensordot(full_feat, weights, axes=([2], [0]))  # shape (N, N)
+    dot += 2.0
+    print("dot range:", dot.min(), dot.max(), dot.mean())
     interaction = 1 / (1 + np.exp(-dot))  # sigmoid
-
     return pd.DataFrame(interaction, index=house_df.index, columns=house_df.index)
