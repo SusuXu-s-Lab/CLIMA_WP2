@@ -17,17 +17,17 @@ def generate_T0_states(house_df_with_features, T):
         # At t = 0:
         # 1. Assign repair state: only possible if damage > 0
         if damage > 0:
-            p_repair = min(0.2 + 0.6 * damage, 1.0)  # Higher damage → higher chance
+            p_repair = min(0.5 + 0.7 * damage, 1.0)  # Higher damage → higher chance
             repair_0 = int(np.random.rand() < p_repair)
         else:
             repair_0 = 0
 
         # 2. Assign vacancy state based on community damage level
-        p_vacant = min(0.03 + 0.2 * community_damage.get(community, 0), 0.3)
+        p_vacant = min(0.05 + 0.2 * community_damage.get(community, 0), 0.2)
         vacant_0 = int(np.random.rand() < p_vacant)
 
         # 3. Assign sales state similarly
-        p_sales = min(0.05 + 0.3 * community_damage.get(community, 0), 0.3)
+        p_sales = min(0.05 + 0.05 * community_damage.get(community, 0), 0.2)
         sales_0 = int(np.random.rand() < p_sales)
 
         for t in range(T):
@@ -74,7 +74,8 @@ def update_full_states_one_step(full_states_df: pd.DataFrame,
     full_states_df : DataFrame
         Same object, but states at time t+1 for dimension k are updated.
     """
-
+    p_self_series=p_self_series/10
+    p_ji_df=p_ji_df/10
     state_cols = ['repair_state', 'vacancy_state', 'sales_state']
     k_col      = state_cols[k]
 
