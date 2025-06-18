@@ -110,6 +110,7 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
 
         # --- update states (writes into time t+1 row) -----------------------
         house_states = update_full_states_one_step(
+            house_df_with_features,
             house_states,                     # full long table
             p_self,
             p_ji,

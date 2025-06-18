@@ -80,8 +80,8 @@ def compute_p_self(house_df, full_state_df, t, k, L=3):
     # (4) weights
     w_static = np.array([1.0, 0.5, 0.5])             # income, age, race
     w_hist   = np.full(2 * L, -0.8)                  # L steps of 2 non-k dims
-    w_time = np.array([0.2])
-    weights  = np.concatenate([w_static, w_hist, w_time])/20
+    w_time = np.array([-15])
+    weights  = np.concatenate([w_static, w_hist, w_time])/50
 
     assert weights.shape[0] == all_feat.shape[1], "Shape mismatch in feature × weight"
 
@@ -149,9 +149,9 @@ def compute_p_ji_linear(link_df,
     w_demo   = np.array([-2.0, -1.5, -1.5])
     w_hist   = np.full(2 * L, -1.0)                # applies to both src & tgt
     w_link   = np.array([0.8])
-    w_dist   = np.array([-3])
-    w_time = np.array([0.3])
-    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])/20     # (3+4L+2,)
+    w_dist   = np.array([-4])
+    w_time = np.array([-15.0])
+    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])/50     # (3+4L+2,)
     scores = np.tensordot(feat_all, weights, axes=([-1], [0]))             # (N,N)
     p_mat  = 1.0 / (1.0 + np.exp(-scores))                                 # sigmoid
 
