@@ -59,6 +59,6 @@ def compute_interaction_potential(house_df, state_df, t):
                         -5.0])/10000           # dist_ij
     dot = np.tensordot(full_feat, weights, axes=([2], [0]))  # shape (N, N)
     dot += 2.0
-    print("dot range:", dot.min(), dot.max(), dot.mean())
+    # print("dot range:", dot.min(), dot.max(), dot.mean())
     interaction = 1 / (1 + np.exp(-dot))  # sigmoid
     return pd.DataFrame(interaction, index=house_df.index, columns=house_df.index)

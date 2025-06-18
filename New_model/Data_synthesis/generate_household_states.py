@@ -17,7 +17,7 @@ def generate_T0_states(house_df_with_features, T):
         # At t = 0:
         # 1. Assign repair state: only possible if damage > 0
         if damage > 0:
-            p_repair = min(0.5 + 0.7 * damage, 1.0)  # Higher damage → higher chance
+            p_repair = min(0.4 + 0.4 * damage, 1.0)  # Higher damage → higher chance
             repair_0 = int(np.random.rand() < p_repair)
         else:
             repair_0 = 0
@@ -44,7 +44,8 @@ def generate_T0_states(house_df_with_features, T):
     return states_df
 
 
-def update_full_states_one_step(full_states_df: pd.DataFrame,
+def update_full_states_one_step(house_df_with_features:pd.DataFrame,
+                                full_states_df: pd.DataFrame,
                                 p_self_series: pd.Series,
                                 p_ji_df: pd.DataFrame,
                                 links_df: pd.DataFrame,
@@ -81,8 +82,8 @@ def update_full_states_one_step(full_states_df: pd.DataFrame,
 
     # --- 0. Slice current & next rows ---------------------------------------
     cur_df  = full_states_df[full_states_df['time'] == t].set_index('home')
-    next_df = full_states_df[full_states_df['time'] == t + 1].set_index('home').copy()
-
+    # next_df = full_states_df[full_states_df['time'] == t + 1].set_index('home').copy()
+    next_df = cur_df.copy()
     homes   = cur_df.index.tolist()
     link_m  = links_df.values
     state_k = cur_df[k_col].values        # s_i^k(t)
@@ -91,6 +92,15 @@ def update_full_states_one_step(full_states_df: pd.DataFrame,
 
     # --- 1. Update each household -------------------------------------------
     for i, h_i in enumerate(homes):
+        if k == 0:
+            damage_level = house_df_with_features.set_index('home').loc[h_i, 'damage_level']
+            if damage_level <= 0:
+                next_df.at[h_i, k_col] = 0
+                continue
+        other_state_cols = [col for j, col in enumerate(state_cols) if j != k]
+        already_active = cur_df.loc[h_i, other_state_cols].sum() > 0
+        if already_active:
+            continue
 
         # (a) irreversible: once active -> remain 1
         if state_k[i] == 1:
