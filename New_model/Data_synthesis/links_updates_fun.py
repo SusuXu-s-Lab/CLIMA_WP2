@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.metrics.pairwise import haversine_distances
 import pygeohash as pgh
 
-def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.5):
+def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.5, epsilon=1e-8):
     homes = similarity_df.index.tolist()
     N = len(homes)
 
@@ -15,13 +15,12 @@ def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.
     sim_vals = similarity_df.values[triu_indices]
     inter_vals = interaction_df.values[triu_indices]
     # Compute logits for each pair (3 logits: for no-link, bonding, bridging)
-    logit_0 = np.ones_like(sim_vals)  # base score for "no link"
-    logit_1 = alpha_0 * sim_vals      # bonding
-    logit_2 = beta_0 * inter_vals     # bridging
+    logit_0 = np.zeros_like(sim_vals)  # base score for "no link"
+    logit_1 = np.log(alpha_0 * sim_vals + epsilon)  # bonding link
+    logit_2 = np.log(inter_vals + epsilon)  # bridging link
 
     logits = np.vstack((logit_0, logit_1, logit_2)).T  # shape (K, 3)
     probs = softmax(logits, axis=1)  # shape (K, 3)
-
     # Sample link type from categorical distribution
     link_types = np.array([np.random.choice([0, 1, 2], p=p) for p in probs])
 
@@ -30,6 +29,9 @@ def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.
     link_matrix[triu_indices] = link_types
     link_matrix[(triu_indices[1], triu_indices[0])] = link_types
 
+    output_path = "link_probs.csv"
+    df = pd.DataFrame(probs, columns=["P_no_link", "P_bonding", "P_bridging"])
+    df.to_csv(output_path, index=False)
     return pd.DataFrame(link_matrix, index=homes, columns=homes)
 
 def compute_p_self(house_df, full_state_df, t, k, L=3):
@@ -189,7 +191,7 @@ def update_link_matrix_one_step(similarity_df: pd.DataFrame,
     """
 
     homes = similarity_df.index.tolist()          # common ordering for all matrices
-    N     = len(homes)
+    N = len(homes)
 
     # --- fetch vacancy indicators at time t ---------------------------------
     vac_t = (house_states[house_states['time'] == t]
@@ -203,7 +205,7 @@ def update_link_matrix_one_step(similarity_df: pd.DataFrame,
     link_new = np.zeros((N, N), dtype=int)
 
     link_prev = links_prev_df.values
-    sim_mat   = similarity_df.values
+    sim_mat = similarity_df.values
     inter_mat = interaction_df.values
 
     rng = np.random.default_rng()
@@ -215,26 +217,21 @@ def update_link_matrix_one_step(similarity_df: pd.DataFrame,
             # 1)  from NO-LINK  (Eq. 13-14) ---------------------------------
             if prev == 0:
 
-                logits = np.array([2.0,
-                                   alpha_bonding * sim_mat[i, j],
-                                   beta_form     * inter_mat[i, j]])
-                probs  = softmax(logits)           # [p00, p01, p02]
+                probs = [1.0-inter_mat[i, j], inter_mat[i, j]]
                 # print(probs)
-                new    = rng.choice([0, 1, 2], p=probs)
+                new = rng.choice([0, 2], p=probs)
 
             # 2)  from BONDING  (Eq. 15)  – stays bonding
             elif prev == 1:
-                probs=[0.075,0.85,0.075]
-                new    = rng.choice([0, 1, 2], p=probs)                            # p11 = 1
+                new = 1                        # p11 = 1
 
             # 3)  from BRIDGING  (Eq.16-17)
             else:                                  # prev == 2
-                # pdb.set_trace()
                 both_stay = (vac_t[i] == 0) and (vac_t[j] == 0)
-                p22 = beta_form*inter_mat[i, j] if both_stay else gamma * beta_form*inter_mat[i, j]
+                p22 = inter_mat[i, j] if both_stay else 0
                 p22 = np.clip(p22, 0.0, 1.0)
-                p20 = 0.05 - p22                    # may drop to no-link
-                probs=softmax([p20, p22])
+                p20 = 1 - p22                    # may drop to no-link
+                probs=[p20, p22]
                 # print(probs)
                 # pdb.set_trace()
                 new = rng.choice([0, 2], p=probs)

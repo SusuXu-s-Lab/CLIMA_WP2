@@ -1,3 +1,6 @@
+import pdb
+import imageio
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -45,7 +48,7 @@ def visulize_links():
     print("Number of unique households:", len(set(df['household_id_1'].tolist() + df['household_id_2'].tolist())))
 
     # Create comprehensive visualizations on a single figure
-    plt.style.use('seaborn-v0_8')
+    # plt.style.use('seaborn-v0_8')
     plt.figure(figsize=(10, 6))
 
     link_counts_time = df.groupby(['time_step', 'link_type']).size().unstack(fill_value=0)
@@ -108,5 +111,69 @@ def visulize_links():
 
     print(time_stats.head())
 
+def visulize_interpot_gif():
+    inter_t_all = np.load("inter_t_all.npy")
+    gif_frames = []
+    temp_dir = "tmp_frames"
+    os.makedirs(temp_dir, exist_ok=True)
+
+    for t, inter_t in enumerate(inter_t_all):
+        values = inter_t.flatten()
+        values = values[~np.isnan(values)]  # 去掉 NaN 的对角线
+
+        plt.figure(figsize=(6, 4))
+        plt.hist(values, bins=30, color='skyblue', edgecolor='black')
+        plt.title(f'Interaction Potential Distribution at t={t}')
+        plt.xlabel('Interaction Value')
+        plt.ylabel('Frequency')
+        plt.tight_layout()
+
+        frame_path = os.path.join(temp_dir, f"frame_{t:03d}.png")
+        plt.savefig(frame_path)
+        gif_frames.append(imageio.imread(frame_path))
+        plt.close()
+
+    imageio.mimsave("interpot_animation.gif", gif_frames, duration=0.5, loop=0)
+
+    for frame in os.listdir(temp_dir):
+        os.remove(os.path.join(temp_dir, frame))
+    os.rmdir(temp_dir)
+
+
+def visulize_sim():
+    similarity_df_loaded = pd.read_csv("similarity_df.csv", index_col=0)
+    similarity_matrix = similarity_df_loaded.values
+    np.fill_diagonal(similarity_matrix, np.nan)
+    values = similarity_matrix.flatten()
+    values = values[~np.isnan(values)]
+
+    plt.figure(figsize=(6, 4))
+    plt.hist(values, bins=30, color='salmon', edgecolor='black')
+    plt.title("Similarity Matrix Distribution (excluding diagonal)")
+    plt.xlabel("Similarity Value")
+    plt.ylabel("Frequency")
+    plt.tight_layout()
+    plt.show()
+    # plt.savefig("similarity_distribution/similarity_distribution.png")
+    plt.close()
+def visulize_prob():
+    df=pd.read_csv('link_probs.csv')
+    # Plot distributions
+    plt.figure(figsize=(8, 6))
+    plt.hist(df['P_no_link'], bins=30, alpha=0.6, label='P_no_link', density=True)
+    plt.hist(df['P_bonding'], bins=30, alpha=0.6, label='P_bonding', density=True)
+    plt.hist(df['P_bridging'], bins=30, alpha=0.6, label='P_bridging', density=True)
+
+    plt.xlabel('Probability Value')
+    plt.ylabel('Density')
+    plt.title('Distribution of Link Probabilities')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+visulize_sim()
+visulize_interpot_gif()
 visulize_links()
 visulize_state()
+visulize_prob()

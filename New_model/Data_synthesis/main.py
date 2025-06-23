@@ -12,8 +12,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Hyper parameter definition
-alpha=0.0001
-beta=3
+alpha=0.1
+beta=0.0001
 gamma=0.6
 L=1
 state_dims = ['repair_state', 'vacancy_state', 'sales_state']
@@ -35,7 +35,7 @@ home2 = df_ori[['home_2']].rename(columns={'home_2': 'home'})
 # Merge and remove duplicates
 house_df = pd.concat([home1, home2], ignore_index=True).drop_duplicates(subset='home')
 house_df = house_df.dropna()
-house_df=house_df[:50]
+house_df=house_df[:100]
 '''
 Household Feautres Generation
 '''
@@ -54,6 +54,7 @@ T=0 Household Similarity and Intercation Potential
 # Compute Similarity and Interaction Potential
 similarity_df = compute_similarity(house_df_with_features)
 interaction_df = compute_interaction_potential(house_df_with_features, house_states, t=0)
+
 '''
 T=0 Links Generation
 '''
@@ -80,7 +81,7 @@ initial_links_df = generate_initial_links(similarity_df, interaction_df, alpha_0
 
 # ---- store link matrices for each t (t index aligned with "time") ----------
 link_snapshots = {0: initial_links_df.copy()}
-
+inter_t_list = []
 # ---------------- main simulation loop (t = 0 … T-1) -----------------------
 for t in tqdm(range(T - 1)):              # we already have states at t, produce t+1
     print(f'--- sim step  {t}  →  {t+1} ---')
@@ -125,6 +126,8 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
     # similarity / interaction may be time-varying; here we fetch for step t
     sim_t = compute_similarity(house_df_with_features)
     inter_t = compute_interaction_potential(house_df_with_features, house_states, t=t)
+    inter_t_list.append(inter_t.copy())
+
     link_next = update_link_matrix_one_step(
         sim_t,
         inter_t,
@@ -201,6 +204,9 @@ links_long_df.to_csv('sysnthetic_data/ground_truth_network.csv',index=False)
 blocked_df.to_csv('sysnthetic_data/observed_network.csv',index=False)
 house_df.to_csv('sysnthetic_data/household_loactions.csv',index=False)
 house_df_with_features.to_csv('sysnthetic_data/household_features.csv', index=False)
+np.save("inter_t_all.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
+similarity_df.to_csv("similarity_df.csv")
+
 print("house_states shape :", house_states.shape)
 print("links_long_df shape:", links_long_df.shape)
 print("links_long_df shape:", blocked_df.shape)
