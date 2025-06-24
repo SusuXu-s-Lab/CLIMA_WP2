@@ -121,7 +121,7 @@ class NetworkEvolution(nn.Module):
             1 - interaction_pot.squeeze(1)  # Otherwise: 1-interaction_potential
         )
         
-        trans_probs[:, 0, 1] = torch.zeros(batch_size)  # Always 0 for bonding from no-link
+        trans_probs[:, 0, 1] = 1e-6  # Always 0 for bonding from no-link
         
         trans_probs[:, 0, 2] = torch.where(
             either_vacant.squeeze(1) > 0.5,
@@ -130,9 +130,9 @@ class NetworkEvolution(nn.Module):
         )
         
         # From bonding (ℓ_ij(t-1) = 1) - never disappear
-        trans_probs[:, 1, 0] = 0.0
-        trans_probs[:, 1, 1] = 1.0  # Always persist
-        trans_probs[:, 1, 2] = 0.0
+        trans_probs[:, 1, 0] = 1e-6
+        trans_probs[:, 1, 1] = 1.0 - 2e-6  # Always persist
+        trans_probs[:, 1, 2] = 1e-6
         
         # From bridging (ℓ_ij(t-1) = 2)
         # If either vacant: p(0|2)=1-interaction_pot, p(1|2)=0, p(2|2)=interaction_pot
@@ -144,13 +144,16 @@ class NetworkEvolution(nn.Module):
             torch.zeros(batch_size)  # Otherwise: no decay
         )
         
-        trans_probs[:, 2, 1] = torch.zeros(batch_size)  # Never become bonding
+        trans_probs[:, 2, 1] = 1e-6*torch.ones(batch_size)  # Never become bonding
         
         trans_probs[:, 2, 2] = torch.where(
             either_vacant.squeeze(1) > 0.5,
             interaction_pot.squeeze(1),  # If either vacant: stay prob
             torch.ones(batch_size)  # Otherwise: perfect persistence
         )
+
+        row_sums = trans_probs.sum(dim=2, keepdim=True)
+        trans_probs = trans_probs / row_sums
         
         return trans_probs
     

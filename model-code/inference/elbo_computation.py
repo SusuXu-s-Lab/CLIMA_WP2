@@ -4,6 +4,16 @@ from typing import Dict, List, Tuple
 from models import NetworkEvolution, StateTransition
 
 class ELBOComputation:
+    """
+    Updated ELBO computation following PDF formulation with normalization added.
+    
+    Key changes:
+    1. Network observation likelihood uses marginal probabilities
+    2. Prior likelihood uses both marginals and conditionals (much more complex)
+    3. Posterior entropy uses conditional entropy formulas
+    4. State likelihood uses marginal-based sampling (conceptually same)
+    5. ALL TERMS NOW NORMALIZED BY GLOBAL PROBLEM SIZE
+    """
     
     def __init__(self, network_evolution: NetworkEvolution, state_transition: StateTransition,
                  sparsity_weight: float = 0.0):
@@ -27,8 +37,20 @@ class ELBOComputation:
         State likelihood using marginal-based Gumbel-Softmax samples.
         NOW WITH NORMALIZATION: Divided by total possible decision opportunities.
         """
+
+        def compute_dynamic_class_weights(current_activations):
+            n_positive = current_activations.sum()
+            n_total = len(current_activations)
+            
+            if n_positive == 0:
+                return 1.0, 1.0  
+            
+            pos_weight = min((n_total - n_positive) / n_positive, 10.0)
+            return pos_weight, 1.0
+
         total_likelihood = 0.0
-        num_samples = len(gumbel_samples)
+        num_samples = len(gumbel_samples[0])
+        # print(f"Number of Gumbel samples: {num_samples}")
         
         for sample_idx, current_samples in enumerate(gumbel_samples):
             sample_likelihood = 0.0
@@ -60,16 +82,20 @@ class ELBOComputation:
                     
                     # Get actual outcomes
                     actual_outcomes = states[batch_undecided, t+1, decision_k]
+
+                    pos_weight, neg_weight = compute_dynamic_class_weights(actual_outcomes)
                     
                     # Compute log likelihood
-                    log_probs = actual_outcomes * torch.log(activation_probs + 1e-8) + \
-                               (1 - actual_outcomes) * torch.log(1 - activation_probs + 1e-8)
+                    pos_log_probs = actual_outcomes * torch.log(activation_probs + 1e-8)
+                    neg_log_probs = (1 - actual_outcomes) * torch.log(1 - activation_probs + 1e-8)
                     
-                    sample_likelihood += torch.sum(log_probs)
+                    weighted_likelihood = (pos_weight * pos_log_probs.sum() + 
+                                        neg_weight * neg_log_probs.sum())
+                    sample_likelihood += weighted_likelihood
             
             total_likelihood += sample_likelihood
         
-        return total_likelihood / num_samples
+        return total_likelihood
     
 
     def compute_network_observation_likelihood_batch(self,
@@ -284,6 +310,8 @@ class ELBOComputation:
                     # print(f"i,j: {i},{j}, t: {t}, prob_contrib: {prob_contrib.item()}")
             
             return total_likelihood
+
+
     
     def compute_posterior_entropy_batch(self, 
                                        conditional_probs: Dict[str, torch.Tensor],
@@ -375,57 +403,107 @@ class ELBOComputation:
         )[0]
     
     def compute_constraint_penalty(self, features, states, distances, node_batch, 
-                              network_data, gumbel_samples, max_timestep):
+                          network_data, gumbel_samples, max_timestep):
         """
         NEW: Compute decision constraint penalties:
         1. repair vs (vacant + sell) - can't repair if moved/sold
         2. sell implies vacant - if sold house, should have moved out
+    
         """
         if len(gumbel_samples) == 0:
             return torch.tensor(0.0)
         
-        current_samples = gumbel_samples[0]
         total_penalty = 0.0
-        count = 0
         
-        for t in range(max_timestep + 1):
-            for node_idx in node_batch:
-                # Get current observed states
-                vacant_obs = states[node_idx, t, 0]  # 0 or 1
-                repair_obs = states[node_idx, t, 1]  # 0 or 1  
-                sell_obs = states[node_idx, t, 2]    # 0 or 1
-                
-                penalty_1 = 0.0
-                penalty_2 = 0.0
-                
-                # Penalty 1: repair vs (vacant + sell) - only if repair=0
-                if repair_obs == 0:
-                    # Get predicted probabilities
-                    vacant_prob = vacant_obs if vacant_obs == 1 else self._get_activation_prob(
-                        node_idx, 0, features, states, distances, network_data, current_samples, t)
+        for sample_idx, current_samples in enumerate(gumbel_samples):
+            sample_penalty = 0.0
+            count = 0
+            
+            for t in range(max_timestep + 1):
+                for node_idx in node_batch:
+                    # Get current observed states
+                    vacant_obs = states[node_idx, t, 0]  # 0 or 1
+                    repair_obs = states[node_idx, t, 1]  # 0 or 1  
+                    sell_obs = states[node_idx, t, 2]    # 0 or 1
                     
-                    repair_prob = self._get_activation_prob(
-                        node_idx, 1, features, states, distances, network_data, current_samples, t)
+                    penalty_1 = 0.0
+                    penalty_2 = 0.0
                     
-                    sell_prob = sell_obs if sell_obs == 1 else self._get_activation_prob(
-                        node_idx, 2, features, states, distances, network_data, current_samples, t)
+                    # Penalty 1: repair vs (vacant + sell) - only if repair=0
+                    if repair_obs == 0:
+                        # Get predicted probabilities using current sample
+                        vacant_prob = vacant_obs if vacant_obs == 1 else self._get_activation_prob(
+                            node_idx, 0, features, states, distances, network_data, current_samples, t)
+                        
+                        repair_prob = self._get_activation_prob(
+                            node_idx, 1, features, states, distances, network_data, current_samples, t)
+                        
+                        sell_prob = sell_obs if sell_obs == 1 else self._get_activation_prob(
+                            node_idx, 2, features, states, distances, network_data, current_samples, t)
+                        
+                        # Can't repair if moved out or sold house
+                        penalty_1 = repair_prob * (vacant_prob + sell_prob)
                     
-                    # Can't repair if moved out or sold house
-                    penalty_1 = repair_prob * (vacant_prob + sell_prob)
-                
-                # Penalty 2: sell implies vacant - only if vacant=0 and sell=1
-                # Cases: [0,0,1] and [0,1,1]
-                if vacant_obs == 0 and sell_obs == 1:
-                    # If sold but not moved out, that's illogical
-                    vacant_prob = self._get_activation_prob(
-                        node_idx, 0, features, states, distances, network_data, current_samples, t)
+                    # Penalty 2: sell implies vacant - only if vacant=0 and sell=1
+                    # Cases: [0,0,1] and [0,1,1]
+                    if vacant_obs == 0 and sell_obs == 1:
+                        # If sold but not moved out, that's illogical
+                        vacant_prob = self._get_activation_prob(
+                            node_idx, 0, features, states, distances, network_data, current_samples, t)
+                        
+                        penalty_2 = 1 - vacant_prob  # Penalty if vacant_prob is low when sell=1
                     
-                    penalty_2 = 1 - vacant_prob  # Penalty if vacant_prob is low when sell=1
-                
-                total_penalty += (penalty_1 + penalty_2)
-                count += 1
+                    sample_penalty += (penalty_1 + penalty_2)
+                    count += 1
+            
+            if count > 0:
+                total_penalty += sample_penalty / count
         
-        return total_penalty / count if count > 0 else torch.tensor(0.0)
+        return total_penalty / len(gumbel_samples)
+    
+
+    # def compute_connection_density_bonus(self, marginal_probs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    #     """Reward network connectivity to counteract sparsity bias"""
+    #     if len(marginal_probs) == 0:
+    #         return torch.tensor(0.0)
+        
+    #     total_connection_prob = 0.0
+    #     total_pairs = 0
+        
+    #     for pair_key, π_ij in marginal_probs.items():
+    #         # connection probability is sum of probabilities for connected states
+    #         connection_prob = π_ij[1] + π_ij[2]  
+    #         total_connection_prob += connection_prob
+    #         total_pairs += 1
+        
+    #     if total_pairs > 0:
+    #         avg_connection_prob = total_connection_prob / total_pairs
+    #         # reward higher connection density
+    #         density_bonus = torch.log(avg_connection_prob + 1e-8)
+    #         return density_bonus
+        
+    #     return torch.tensor(0.0)
+
+    def compute_connection_density_bonus(self, marginal_probs, target_density=0.35):
+        """Target-based density bonus instead of always rewarding connections"""
+        
+        connection_probs = []
+        for pair_key, π_ij in marginal_probs.items():
+            connection_prob = π_ij[1] + π_ij[2]
+            connection_probs.append(connection_prob)
+        
+        if len(connection_probs) > 0:
+            current_density = torch.mean(torch.stack(connection_probs))
+            
+            # If current density is below target, reward based on log difference
+            if current_density < target_density:
+                bonus = torch.log(current_density / target_density + 1e-8)  
+            else:
+                bonus = - (current_density - target_density) ** 2      
+            
+            return bonus
+        
+        return torch.tensor(0.0)
     
     def compute_elbo_batch(self,
                         features: torch.Tensor,
@@ -437,11 +515,67 @@ class ELBOComputation:
                         marginal_probs: Dict[str, torch.Tensor],
                         gumbel_samples: List[Dict[str, torch.Tensor]],
                         max_timestep: int,
-                        lambda_constraint: float = 0.01) -> Dict[str, torch.Tensor]:        
+                        lambda_constraint: float = 0.01,
+                        current_epoch: int = 0) -> Dict[str, torch.Tensor]:        
         """
         Complete ELBO computation with per-example normalization and component weighting.
         """
-        
+
+        # def get_dynamic_weights(epoch):
+        #     if epoch < 30:  
+        #         return {
+        #             'state': 1.0, 'observation': 1.0, 'prior': 0.001,          
+        #             'entropy': 1.0, 'sparsity': 0, 'constraint': -lambda_constraint, 'density_bonus': 1.0
+        #         }
+        #     elif epoch < 100:  # 50-100 epoch: introduce prior gradually
+        #         progress = (epoch - 30) / 70  # 0 to 1
+        #         prior_weight = 0.001 + 0.099 * progress
+        #         return {
+        #             'state': 1.0, 'observation': 1.0, 'prior': prior_weight ,
+        #             'entropy': 1.0 - 0.3 * progress, 'sparsity': 0, 'constraint': -lambda_constraint, 'density_bonus': 1.0
+        #         }
+        #     else:  # 100 epoch: full weight
+        #         return {
+        #             'state': 1.0, 'observation': 1.0, 'prior': 0.1,
+        #             'entropy': 0.7, 'sparsity': 0, 'constraint': -lambda_constraint, 'density_bonus': 1.0
+        #         }
+
+        def get_dynamic_weights(epoch):
+            if epoch < 100:  
+                return {
+                    'state': 1.0, 
+                    'observation': 1.0, 
+                    'prior': 0.1,                          # 提高prior权重
+                    'entropy': 1.0, 
+                    'sparsity': 0, 
+                    'constraint': -lambda_constraint, 
+                    'density_bonus': 2.0                    # 降低density bonus
+                }
+            elif epoch < 200:
+                progress = (epoch - 100) / 100
+                prior_weight = 0.1 + 0.1 * progress      # 从0.1到0.2
+                # density_weight = 2.0 * (1 - 0.5 * progress) # 从0.5降到0.25
+                density_weight = 2.0
+                return {
+                    'state': 1.0, 
+                    'observation': 1.0, 
+                    'prior': prior_weight,
+                    'entropy': 1.0 - 0.3 * progress, 
+                    'sparsity': 0, 
+                    'constraint': -lambda_constraint, 
+                    'density_bonus': density_weight
+                }
+            else:
+                return {
+                    'state': 1.0, 
+                    'observation': 1.0, 
+                    'prior': 0.2,
+                    'entropy': 0.7, 
+                    'sparsity': 0, 
+                    'constraint': -lambda_constraint, 
+                    'density_bonus': 2.0                   # 最终很小的bonus
+                }
+
         # Get normalization factors
         total_households = features.shape[0]
         total_possible_pairs = total_households * (total_households - 1) // 2
@@ -467,17 +601,22 @@ class ELBOComputation:
         features, states, distances, node_batch, network_data, 
         gumbel_samples, max_timestep
         )
-        
+
+        density_bonus_raw = self.compute_connection_density_bonus(marginal_probs)
+
         print(f"Raw values - State: {state_likelihood_raw.item():.2f}, "
             f"Obs: {observation_likelihood_raw.item():.2f}, "
             f"Prior: {prior_likelihood_raw.item():.2f}, "
             f"Entropy: {posterior_entropy_raw.item():.2f},"
             f" Sparsity: {sparsity_reg_raw.item():.2f}, "
-            f"Constraint: {constraint_penalty_raw.item():.2f}")
-        
+            f"Constraint: {constraint_penalty_raw.item():.2f}, "
+            f"Density Bonus: {density_bonus_raw.item():.2f}")
+
         # Calculate actual counts for proper normalization
-        total_state_predictions =  max_timestep * 3  # 3 decision types
+        # total_state_predictions =  max_timestep * 3  # 3 decision types
+        total_state_predictions = len(gumbel_samples[0]) * len(gumbel_samples)  # 3 decision types per sample
         total_network_pairs = len(marginal_probs)  # Actual pairs being evaluated
+        print(f"Total state predictions: {total_state_predictions}, Total network pairs: {total_network_pairs}")
         
         # Normalize by actual counts
         state_likelihood_per_prediction = state_likelihood_raw / total_state_predictions
@@ -491,42 +630,33 @@ class ELBOComputation:
             f"Prior: {prior_likelihood_per_pair.item():.4f}, "
             f"Entropy: {entropy_per_pair.item():.4f}")
         
-        # Adaptive weighting based on magnitudes
-        state_magnitude = abs(state_likelihood_per_prediction.item())
-        network_magnitude = max(abs(network_likelihood_per_pair.item()), 
-                            abs(prior_likelihood_per_pair.item()), 
-                            abs(entropy_per_pair.item()))
-        
-        if network_magnitude > 0:
-            state_weight = network_magnitude / state_magnitude if state_magnitude > 0 else 1.0
-            state_weight = min(state_weight, 1.0)  # Cap at 1.0
-        else:
-            state_weight = 0.01  # Fallback small weight
-        
-        print(f"Adaptive state weight: {state_weight:.6f}")
+
+        weight = get_dynamic_weights(current_epoch)
         
         # Apply adaptive weighting
-        weighted_state_likelihood = state_weight * state_likelihood_per_prediction
-        weighted_observation_likelihood = 1.0 * network_likelihood_per_pair
-        weighted_prior_likelihood = 1.0 * prior_likelihood_per_pair
-        weighted_posterior_entropy = 1.0 * entropy_per_pair
-        weighted_sparsity_reg = 1.0 * sparsity_per_pair
-        weighted_constraint_penalty = -lambda_constraint * constraint_penalty_raw
+        weighted_state_likelihood = weight['state'] * state_likelihood_per_prediction
+        weighted_observation_likelihood = weight['observation'] * network_likelihood_per_pair
+        weighted_prior_likelihood = weight['prior'] * prior_likelihood_per_pair
+        weighted_posterior_entropy = weight['entropy'] * entropy_per_pair
+        weighted_sparsity_reg = weight['sparsity'] * sparsity_per_pair
+        weighted_constraint_penalty = weight['constraint'] * constraint_penalty_raw
+        weighted_density_bonus = weight['density_bonus'] * density_bonus_raw
         
         # Total weighted ELBO  
         # total_elbo = (weighted_state_likelihood + weighted_observation_likelihood + 
         #             weighted_prior_likelihood + weighted_posterior_entropy - weighted_sparsity_reg - weighted_constraint_penalty)
-        total_elbo = (5*weighted_state_likelihood + weighted_observation_likelihood + 
-                    weighted_prior_likelihood + weighted_posterior_entropy - weighted_sparsity_reg - weighted_constraint_penalty)
+        total_elbo = (weighted_state_likelihood + weighted_observation_likelihood + 
+                    weighted_prior_likelihood + weighted_posterior_entropy - weighted_sparsity_reg - weighted_constraint_penalty + weighted_density_bonus)
         
         print(f"Weighted components - State: {weighted_state_likelihood.item():.4f}, "
             f"Obs: {weighted_observation_likelihood.item():.4f}, "
             f"Prior: {weighted_prior_likelihood.item():.4f}, "
             f"Entropy: {weighted_posterior_entropy.item():.4f}")
         print(f"Sparsity: {weighted_sparsity_reg.item():.4f}, "
-            f"Constraint: {weighted_constraint_penalty.item():.4f}")
+            f"Constraint: {weighted_constraint_penalty.item():.4f}, "
+            f"Density Bonus: {weighted_density_bonus.item():.4f}")
         print(f"Total weighted ELBO: {total_elbo.item():.4f}")
-        
+
         return {
             'state_likelihood': weighted_state_likelihood,
             'observation_likelihood': weighted_observation_likelihood, 
@@ -534,5 +664,6 @@ class ELBOComputation:
             'posterior_entropy': weighted_posterior_entropy,
             'sparsity_regularization': weighted_sparsity_reg,
             'constraint_penalty': weighted_constraint_penalty,
+            'density_bonus': weighted_density_bonus,
             'total_elbo': total_elbo
         }

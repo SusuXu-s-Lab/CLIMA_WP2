@@ -6,7 +6,14 @@ from models import NetworkTypeNN
 from models.utils import get_full_state_history
 
 class MeanFieldPosterior:
-
+    """
+    Updated variational posterior following PDF formulation.
+    
+    Key changes:
+    1. Compute both conditional probabilities π_ij(t | k) AND marginal probabilities π̄_ij(t)
+    2. Call NetworkTypeNN 3 times per (i,j,t) to get full 3x3 transition matrix
+    3. Recursive marginal computation: π̄_ij(t) = Σ π̄_ij(t-1)[k'] × π_ij(t | k')[k]
+    """
     
     def __init__(self, network_type_nn: NetworkTypeNN, L: int = 1):
         self.network_type_nn = network_type_nn

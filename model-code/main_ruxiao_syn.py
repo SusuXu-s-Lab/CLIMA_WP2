@@ -130,7 +130,7 @@ def create_models(data: Dict[str, Any], L: int) -> Dict[str, Any]:
     print("Creating neural networks...")
     network_type_nn = NetworkTypeNN(feature_dim=feature_dim, L=L, hidden_dim=128)
     self_nn = SelfActivationNN(feature_dim=feature_dim, L=L, hidden_dim=64)
-    influence_nn = InfluenceNN(feature_dim=feature_dim, L=L, hidden_dim=128)
+    influence_nn = InfluenceNN(feature_dim=feature_dim, L=L, hidden_dim=64)
     interaction_nn = InteractionFormationNN(feature_dim=feature_dim, hidden_dim=32)
     
     print("✓ Neural networks created")
@@ -304,7 +304,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     }
     
     # Save complete model
-    model_path = 'saved_models/trained_model_v2_L3_ruxiao_v3_5*state_likelihood_epoch_500.pth'
+    model_path = 'saved_models/trained_model_ruxiao_v3_new_elbo_norm_imbalance_pred_epoch_300_seed23.pth'
     torch.save({
         'model_state': model_state,
         'elbo_params': elbo_params,
@@ -315,7 +315,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     print(f"✓ Model saved to {model_path}")
     
     # Save training history as JSON for analysis
-    history_path = 'logs/training_history_v2_L3_ruxiao_v3_5*state_likelihood_epoch_500.json'
+    history_path = 'logs/training_history_ruxiao_v3_new_elbo_norm_imbalance_pred_epoch_300_seed23.json'
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
     
@@ -375,7 +375,7 @@ def main():
             loader=loader,
             inference_components=inference_components,
             train_end_time=15,  # Train on timesteps 0-15, test on 16-24
-            max_epochs=500
+            max_epochs=300
         )
         
         # 6. Save results
@@ -398,8 +398,8 @@ def main():
 
 if __name__ == "__main__":
     # Set random seeds for reproducibility
-    torch.manual_seed(42)
-    np.random.seed(42)
+    torch.manual_seed(23)
+    np.random.seed(23)
     
     # Run main pipeline
     exit_code = main()
