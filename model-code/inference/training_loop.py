@@ -9,6 +9,14 @@ from .variational_posterior import MeanFieldPosterior
 
 
 class NetworkStateTrainer:
+    """
+    Updated training coordinator following PDF formulation.
+    
+    Key changes:
+    1. Compute both conditional and marginal probabilities
+    2. Use marginals for Gumbel-Softmax sampling
+    3. Pass both to ELBO computation
+    """
     
     def __init__(self, 
                  mean_field_posterior: MeanFieldPosterior,
@@ -36,18 +44,57 @@ class NetworkStateTrainer:
         self.training_history = []
         
     def temperature_schedule(self, epoch: int, max_epochs: int) -> float:
-        """Temperature scheduling."""
         progress = epoch / max_epochs
-        return 2.0 * (0.1 / 2.0) ** progress
+        if progress < 0.4:  
+            return 2.0
+        else:
+            return 2.0 * (0.3 / 2.0) ** ((progress - 0.4) / 0.6)
     
     def sample_schedule(self, epoch: int, max_epochs: int) -> int:
-        """Sample scheduling."""
-        if epoch < max_epochs * 0.2:
-            return 5
-        elif epoch < max_epochs * 0.6:
-            return 3
+        if epoch < max_epochs * 0.6:
+            return 5 
         else:
-            return 2
+            return 3
+        
+
+    def monitor_network_distributions(self, marginal_probs):
+        """Monitor network type distribution statistics"""
+        if len(marginal_probs) == 0:
+            print("  Network Distribution: No hidden pairs")
+            return
+        
+        # Collect all marginal probabilities
+        all_probs = []
+        for pair_key, prob in marginal_probs.items():
+            if isinstance(prob, torch.Tensor) and prob.dim() == 1 and prob.shape[0] == 3:
+                all_probs.append(prob.detach().cpu())
+        
+        if len(all_probs) == 0:
+            print("  Network Distribution: No valid probabilities")
+            return
+        
+        # Convert to tensor and compute statistics
+        all_probs = torch.stack(all_probs)  # [num_pairs, 3]
+        
+        # Calculate mean and std for each type
+        no_link_stats = all_probs[:, 0]
+        bonding_stats = all_probs[:, 1] 
+        bridging_stats = all_probs[:, 2]
+        
+        print(f"  Network Type Distribution ({len(all_probs)} pairs):")
+        print(f"    No Link:  μ={no_link_stats.mean():.3f}, σ={no_link_stats.std():.3f}, range=[{no_link_stats.min():.3f}, {no_link_stats.max():.3f}]")
+        print(f"    Bonding:  μ={bonding_stats.mean():.3f}, σ={bonding_stats.std():.3f}, range=[{bonding_stats.min():.3f}, {bonding_stats.max():.3f}]")
+        print(f"    Bridging: μ={bridging_stats.mean():.3f}, σ={bridging_stats.std():.3f}, range=[{bridging_stats.min():.3f}, {bridging_stats.max():.3f}]")
+        
+        # Additional statistics: most certain and uncertain pairs
+        entropy = -torch.sum(all_probs * torch.log(all_probs + 1e-8), dim=1)
+        print(f"    Uncertainty: μ_entropy={entropy.mean():.3f}, σ_entropy={entropy.std():.3f}")
+        
+        # Statistics of dominant type distribution
+        dominant_types = torch.argmax(all_probs, dim=1)
+        type_counts = torch.bincount(dominant_types, minlength=3)
+        type_pcts = type_counts.float() / len(all_probs) * 100
+        print(f"    Dominant Types: No Link {type_pcts[0]:.1f}%, Bonding {type_pcts[1]:.1f}%, Bridging {type_pcts[2]:.1f}%")
     
     def train_epoch_batched(self,
                            features: torch.Tensor,
@@ -88,10 +135,22 @@ class NetworkStateTrainer:
             
             # Compute BOTH conditional and marginal probabilities
             conditional_probs, marginal_probs = self.mean_field_posterior.compute_probabilities_batch(
-                features, states, distances, node_batch, network_data, max_timestep
-            )
+                    features, states, distances, node_batches[0], network_data, max_timestep)
             print(f"Conditional and marginal probabilities finished for batch {batch_idx + 1}/{len(node_batches)}")
-            
+
+            if self.epoch < 10 and self.epoch % 1 == 0:
+                print(f"\n=== Epoch {self.epoch} Network Distribution Summary ===")
+                # Recompute to get statistics (only use first batch)
+                self.monitor_network_distributions(marginal_probs)
+            elif self.epoch < 50 and  self.epoch % 2 == 0:
+                print(f"\n=== Epoch {self.epoch} Network Distribution Summary ===")
+                # Recompute to get statistics (only use first batch)
+                self.monitor_network_distributions(marginal_probs)
+            elif self.epoch % 5 == 0:
+                print(f"\n=== Epoch {self.epoch} Network Distribution Summary ===")
+                # Recompute to get statistics (only use first batch)
+                self.monitor_network_distributions(marginal_probs)
+                       
             # Sample hidden links using MARGINAL probabilities
             gumbel_samples = self.gumbel_sampler.sample_hidden_links_batch(
                 marginal_probs, temperature, num_samples
@@ -101,7 +160,7 @@ class NetworkStateTrainer:
             # Compute ELBO using BOTH conditional and marginal probabilities
             batch_elbo = self.elbo_computer.compute_elbo_batch(
                 features, states, distances, node_batch, network_data,
-                conditional_probs, marginal_probs, gumbel_samples, max_timestep, lambda_constraint
+                conditional_probs, marginal_probs, gumbel_samples, max_timestep, lambda_constraint, current_epoch=self.epoch
             )
             print(f"ELBO computation finished for batch {batch_idx + 1}/{len(node_batches)}")
             
@@ -120,7 +179,7 @@ class NetworkStateTrainer:
         # Update parameters after all batches
         batch_loss.backward()
         total_norm = torch.nn.utils.clip_grad_norm_(self.optimizer.param_groups[0]['params'], float('inf'))
-        print(f"总梯度范数: {total_norm:.6f}")
+        print(f"Gradient norm: {total_norm:.6f}")
         self.optimizer.step()
         print(f"Backward pass finished")
         
@@ -187,10 +246,10 @@ class NetworkStateTrainer:
             max_timestep: int,
             max_epochs: int = 1000,
             node_batches: Optional[List[torch.Tensor]] = None,
-            lambda_constraint: float = 0.5,
+            lambda_constraint: float = 0.01,
             verbose: bool = True,
             early_stopping: bool = True,
-            patience: int = 20) -> List[Dict[str, float]]:
+            patience: int = 100) -> List[Dict[str, float]]:
         """
         Full training loop with updated formulation and early stopping.
         """
