@@ -38,6 +38,7 @@ def visulize_state():
     plt.xlabel("Time Step")
     plt.grid(True)
     plt.tight_layout()
+    plt.savefig("states.png")
     plt.show()
 
 def visulize_links():
@@ -60,7 +61,7 @@ def visulize_links():
     plt.ylabel('Number of Links')
     plt.legend(title='Link Type')
     plt.grid(True, alpha=0.3)
-
+    plt.savefig("links.png")
     plt.tight_layout()
     plt.show()
 
@@ -153,8 +154,9 @@ def visulize_sim():
     plt.xlabel("Similarity Value")
     plt.ylabel("Frequency")
     plt.tight_layout()
+    plt.savefig("imilarity_distribution.png")
     plt.show()
-    # plt.savefig("similarity_distribution/similarity_distribution.png")
+
     plt.close()
 def visulize_prob():
     df=pd.read_csv('link_probs.csv')
@@ -170,6 +172,7 @@ def visulize_prob():
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
+    plt.savefig("prob.png")
     plt.show()
 
 visulize_sim()
