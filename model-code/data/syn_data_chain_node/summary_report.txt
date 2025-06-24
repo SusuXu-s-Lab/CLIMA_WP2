@@ -1,0 +1,36 @@
+CHAIN NETWORK TEST WITH REAL VARIABLE RECORDING
+================================================================================
+
+TEST SETUP:
+- 5 households in chain structure: A(0)-B(1)-C(2)-D(3)-E(4)
+- Sequential activation: A(t=1), B(t=2), C(t=3), D(t=4), E(t=5)
+- Observed pairs: (0,1) and (2,3)
+- Hidden pairs to infer: (1,2) and (3,4) should be bridging
+- Only 'vacant' decision is active
+
+TRAINING RESULTS:
+- Initial ELBO: -7.066492
+- Final ELBO: -7.035567
+- Improvement: +0.030925
+
+GENERATED FILES:
+1. REAL TRAINING VARIABLES (MAIN OUTPUT):
+   - real_training_variables.json (complete machine-readable data)
+   - real_training_variables.txt (human-readable analysis)
+
+2. SUPPORTING ANALYSIS:
+   - summary_report.txt (this file)
+
+WHAT THE REAL TRAINING VARIABLES CONTAIN:
+For each recorded epoch and timestep:
+1. Exact Gumbel-Softmax samples generated during training
+2. Self-activation probabilities from neural networks
+3. Neighbor influence probabilities from neural networks
+4. Final FR-SIC probabilities: 1 - (1-p_self) * ∏(1-p_neighbor)
+5. Only inactive nodes are included (only these need prediction)
+
+KEY POINTS:
+- All data comes directly from training process, no re-computation
+- Variables are captured at the exact moment of computation
+- Each sample shows the complete computation chain
+- Averaged probabilities across samples are also provided
