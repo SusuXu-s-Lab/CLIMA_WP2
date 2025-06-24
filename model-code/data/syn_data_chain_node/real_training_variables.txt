@@ -1,0 +1,2161 @@
+REAL TRAINING INTERMEDIATE VARIABLES
+================================================================================
+
+This file contains the EXACT variables from model training:
+- Gumbel-Softmax samples generated during training
+- Self-activation probabilities from neural networks
+- Neighbor influence probabilities from neural networks
+- Final FR-SIC probabilities: 1 - (1-p_self) * ∏(1-p_neighbor)
+- Only inactive nodes are shown (only these need prediction)
+
+============================================================
+EPOCH 0
+============================================================
+
+TIMESTEP 0:
+----------------------------------------
+Gumbel Samples (5):
+  Sample 0:
+    0_2_0: [0.1881, 0.5094, 0.3024] → type_1
+    0_3_0: [0.1727, 0.6834, 0.1439] → type_1
+    0_4_0: [0.2899, 0.4660, 0.2441] → type_1
+    1_2_0: [0.2112, 0.3391, 0.4497] → type_2
+    1_3_0: [0.1802, 0.0750, 0.7448] → type_2
+    1_4_0: [0.5668, 0.1826, 0.2506] → type_0
+    2_4_0: [0.4464, 0.3752, 0.1784] → type_0
+    3_4_0: [0.2263, 0.5375, 0.2362] → type_1
+  Sample 1:
+    0_2_0: [0.2779, 0.1838, 0.5383] → type_2
+    0_3_0: [0.1498, 0.6746, 0.1756] → type_1
+    0_4_0: [0.2144, 0.2779, 0.5077] → type_2
+    1_2_0: [0.6489, 0.0934, 0.2577] → type_0
+    1_3_0: [0.3572, 0.3776, 0.2651] → type_1
+    1_4_0: [0.2810, 0.4425, 0.2765] → type_1
+    2_4_0: [0.3545, 0.4452, 0.2003] → type_1
+    3_4_0: [0.4320, 0.3028, 0.2652] → type_0
+  Sample 2:
+    0_2_0: [0.3578, 0.3250, 0.3172] → type_0
+    0_3_0: [0.2284, 0.5947, 0.1769] → type_1
+    0_4_0: [0.2315, 0.2491, 0.5194] → type_2
+    1_2_0: [0.2915, 0.2063, 0.5022] → type_2
+    1_3_0: [0.4846, 0.1668, 0.3486] → type_0
+    1_4_0: [0.6940, 0.2067, 0.0993] → type_0
+    2_4_0: [0.3637, 0.5077, 0.1285] → type_1
+    3_4_0: [0.4538, 0.3993, 0.1469] → type_0
+  Sample 3:
+    0_2_0: [0.1050, 0.1548, 0.7402] → type_2
+    0_3_0: [0.2667, 0.4350, 0.2983] → type_1
+    0_4_0: [0.4348, 0.1375, 0.4277] → type_0
+    1_2_0: [0.2257, 0.5897, 0.1846] → type_1
+    1_3_0: [0.1463, 0.4848, 0.3689] → type_1
+    1_4_0: [0.3542, 0.2501, 0.3957] → type_2
+    2_4_0: [0.3066, 0.2425, 0.4509] → type_2
+    3_4_0: [0.3652, 0.2249, 0.4098] → type_2
+  Sample 4:
+    0_2_0: [0.1451, 0.1277, 0.7272] → type_2
+    0_3_0: [0.1086, 0.1767, 0.7147] → type_2
+    0_4_0: [0.2101, 0.5378, 0.2521] → type_1
+    1_2_0: [0.2063, 0.4430, 0.3506] → type_1
+    1_3_0: [0.2800, 0.1249, 0.5951] → type_2
+    1_4_0: [0.1948, 0.3494, 0.4558] → type_2
+    2_4_0: [0.4000, 0.3449, 0.2551] → type_0
+    3_4_0: [0.2352, 0.5886, 0.1762] → type_1
+
+Node Computations (inactive nodes only):
+  Node 0:
+    Average final probability: 0.543687
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 1:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 2:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 3:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 4:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+  Node 1:
+    Average final probability: 0.543687
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 1:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 2:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 3:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 4:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+  Node 2:
+    Average final probability: 0.543687
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 1:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 2:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 3:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 4:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+  Node 3:
+    Average final probability: 0.543687
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 1:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 2:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 3:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 4:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+  Node 4:
+    Average final probability: 0.543687
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 1:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 2:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 3:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+      Sample 4:
+        Self-activation: 0.543687
+        No active neighbors
+        Final = Self: 0.543687
+
+
+
+TIMESTEP 1:
+----------------------------------------
+Gumbel Samples (5):
+  Sample 0:
+    0_2_1: [0.4747, 0.1942, 0.3311] → type_0
+    0_3_1: [0.5939, 0.2161, 0.1900] → type_0
+    0_4_1: [0.3591, 0.3928, 0.2481] → type_1
+    1_2_1: [0.3169, 0.3458, 0.3374] → type_1
+    1_3_1: [0.3356, 0.2901, 0.3742] → type_2
+    1_4_1: [0.2175, 0.2621, 0.5204] → type_2
+    2_4_1: [0.5008, 0.2622, 0.2370] → type_0
+    3_4_1: [0.3500, 0.2923, 0.3576] → type_2
+  Sample 1:
+    0_2_1: [0.3999, 0.3139, 0.2862] → type_0
+    0_3_1: [0.3422, 0.2376, 0.4202] → type_2
+    0_4_1: [0.2032, 0.2903, 0.5065] → type_2
+    1_2_1: [0.9082, 0.0339, 0.0579] → type_0
+    1_3_1: [0.3043, 0.2205, 0.4753] → type_2
+    1_4_1: [0.4299, 0.2237, 0.3464] → type_0
+    2_4_1: [0.1277, 0.4957, 0.3766] → type_1
+    3_4_1: [0.3910, 0.2669, 0.3421] → type_0
+  Sample 2:
+    0_2_1: [0.2227, 0.5735, 0.2038] → type_1
+    0_3_1: [0.1444, 0.1684, 0.6872] → type_2
+    0_4_1: [0.2868, 0.4184, 0.2948] → type_1
+    1_2_1: [0.3269, 0.3205, 0.3525] → type_2
+    1_3_1: [0.4115, 0.3026, 0.2859] → type_0
+    1_4_1: [0.2519, 0.2666, 0.4815] → type_2
+    2_4_1: [0.2205, 0.2684, 0.5110] → type_2
+    3_4_1: [0.4859, 0.0547, 0.4593] → type_0
+  Sample 3:
+    0_2_1: [0.2443, 0.4091, 0.3466] → type_1
+    0_3_1: [0.2842, 0.1657, 0.5501] → type_2
+    0_4_1: [0.2395, 0.4037, 0.3568] → type_1
+    1_2_1: [0.3004, 0.2329, 0.4667] → type_2
+    1_3_1: [0.2474, 0.5142, 0.2384] → type_1
+    1_4_1: [0.5704, 0.2650, 0.1645] → type_0
+    2_4_1: [0.2321, 0.2368, 0.5311] → type_2
+    3_4_1: [0.5088, 0.1949, 0.2962] → type_0
+  Sample 4:
+    0_2_1: [0.3714, 0.2946, 0.3340] → type_0
+    0_3_1: [0.2775, 0.3033, 0.4192] → type_2
+    0_4_1: [0.6663, 0.0955, 0.2382] → type_0
+    1_2_1: [0.2053, 0.1472, 0.6476] → type_2
+    1_3_1: [0.3253, 0.4055, 0.2692] → type_1
+    1_4_1: [0.1816, 0.3267, 0.4917] → type_2
+    2_4_1: [0.4166, 0.2248, 0.3586] → type_0
+    3_4_1: [0.2565, 0.2949, 0.4485] → type_2
+
+Node Computations (inactive nodes only):
+  Node 1:
+    Average final probability: 0.782590
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→1: 0.521947 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.478053
+        FR-SIC: 1 - (1-0.545218) * 0.478053 = 0.782590
+
+      Sample 1:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→1: 0.521947 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.478053
+        FR-SIC: 1 - (1-0.545218) * 0.478053 = 0.782590
+
+      Sample 2:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→1: 0.521947 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.478053
+        FR-SIC: 1 - (1-0.545218) * 0.478053 = 0.782590
+
+      Sample 3:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→1: 0.521947 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.478053
+        FR-SIC: 1 - (1-0.545218) * 0.478053 = 0.782590
+
+      Sample 4:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→1: 0.521947 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.478053
+        FR-SIC: 1 - (1-0.545218) * 0.478053 = 0.782590
+
+  Node 2:
+    Average final probability: 0.780777
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→2: 0.517731 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.482269
+        FR-SIC: 1 - (1-0.545218) * 0.482269 = 0.780673
+
+      Sample 1:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→2: 0.517714 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.482286
+        FR-SIC: 1 - (1-0.545218) * 0.482286 = 0.780665
+
+      Sample 2:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→2: 0.517859 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.482141
+        FR-SIC: 1 - (1-0.545218) * 0.482141 = 0.780731
+
+      Sample 3:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→2: 0.518369 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.481631
+        FR-SIC: 1 - (1-0.545218) * 0.481631 = 0.780963
+
+      Sample 4:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→2: 0.518127 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.481873
+        FR-SIC: 1 - (1-0.545218) * 0.481873 = 0.780853
+
+  Node 3:
+    Average final probability: 0.780261
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→3: 0.514906 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.485094
+        FR-SIC: 1 - (1-0.545218) * 0.485094 = 0.779388
+
+      Sample 1:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→3: 0.516601 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.483399
+        FR-SIC: 1 - (1-0.545218) * 0.483399 = 0.780159
+
+      Sample 2:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→3: 0.518481 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.481519
+        FR-SIC: 1 - (1-0.545218) * 0.481519 = 0.781014
+
+      Sample 3:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→3: 0.517480 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.482520
+        FR-SIC: 1 - (1-0.545218) * 0.482520 = 0.780559
+
+      Sample 4:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→3: 0.516655 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.483345
+        FR-SIC: 1 - (1-0.545218) * 0.483345 = 0.780183
+
+  Node 4:
+    Average final probability: 0.779013
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→4: 0.513559 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.486441
+        FR-SIC: 1 - (1-0.545218) * 0.486441 = 0.778776
+
+      Sample 1:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→4: 0.515346 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.484654
+        FR-SIC: 1 - (1-0.545218) * 0.484654 = 0.779588
+
+      Sample 2:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→4: 0.513923 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.486077
+        FR-SIC: 1 - (1-0.545218) * 0.486077 = 0.778941
+
+      Sample 3:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→4: 0.514361 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.485639
+        FR-SIC: 1 - (1-0.545218) * 0.485639 = 0.779140
+
+      Sample 4:
+        Self-activation: 0.545218
+        Neighbor influences:
+          0→4: 0.513213 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.486787
+        FR-SIC: 1 - (1-0.545218) * 0.486787 = 0.778618
+
+
+
+TIMESTEP 2:
+----------------------------------------
+Gumbel Samples (5):
+  Sample 0:
+    0_2_0: [0.1881, 0.5094, 0.3024] → type_1
+    1_2_0: [0.2112, 0.3391, 0.4497] → type_2
+    0_2_1: [0.4747, 0.1942, 0.3311] → type_0
+    1_2_1: [0.3169, 0.3458, 0.3374] → type_1
+    0_2_2: [0.2648, 0.2676, 0.4675] → type_2
+    0_3_2: [0.9400, 0.0046, 0.0553] → type_0
+    0_4_2: [0.2595, 0.3852, 0.3553] → type_1
+    1_2_2: [0.4977, 0.2889, 0.2134] → type_0
+    1_3_2: [0.3754, 0.5480, 0.0766] → type_1
+    1_4_2: [0.2982, 0.5642, 0.1376] → type_1
+    2_4_2: [0.7434, 0.1104, 0.1462] → type_0
+    3_4_2: [0.4889, 0.3203, 0.1908] → type_0
+    0_2_3: [0.3733, 0.4188, 0.2080] → type_1
+    1_2_3: [0.4665, 0.1758, 0.3577] → type_0
+    0_2_4: [0.1466, 0.5155, 0.3379] → type_1
+    1_2_4: [0.4065, 0.2091, 0.3844] → type_0
+    0_2_5: [0.4793, 0.4498, 0.0709] → type_0
+    1_2_5: [0.6467, 0.1289, 0.2244] → type_0
+  Sample 1:
+    0_2_0: [0.2779, 0.1838, 0.5383] → type_2
+    1_2_0: [0.6489, 0.0934, 0.2577] → type_0
+    0_2_1: [0.3999, 0.3139, 0.2862] → type_0
+    1_2_1: [0.9082, 0.0339, 0.0579] → type_0
+    0_2_2: [0.2312, 0.5393, 0.2294] → type_1
+    0_3_2: [0.6754, 0.1337, 0.1909] → type_0
+    0_4_2: [0.2897, 0.3656, 0.3447] → type_1
+    1_2_2: [0.4474, 0.3904, 0.1622] → type_0
+    1_3_2: [0.5374, 0.2444, 0.2182] → type_0
+    1_4_2: [0.2239, 0.2563, 0.5197] → type_2
+    2_4_2: [0.1450, 0.6662, 0.1888] → type_1
+    3_4_2: [0.3704, 0.3056, 0.3241] → type_0
+    0_2_3: [0.0720, 0.1333, 0.7947] → type_2
+    1_2_3: [0.6199, 0.2103, 0.1697] → type_0
+    0_2_4: [0.2394, 0.1638, 0.5968] → type_2
+    1_2_4: [0.3535, 0.1073, 0.5392] → type_2
+    0_2_5: [0.5859, 0.2588, 0.1553] → type_0
+    1_2_5: [0.2873, 0.3986, 0.3141] → type_1
+  Sample 2:
+    0_2_0: [0.3578, 0.3250, 0.3172] → type_0
+    1_2_0: [0.2915, 0.2063, 0.5022] → type_2
+    0_2_1: [0.2227, 0.5735, 0.2038] → type_1
+    1_2_1: [0.3269, 0.3205, 0.3525] → type_2
+    0_2_2: [0.3321, 0.2412, 0.4267] → type_2
+    0_3_2: [0.0129, 0.9392, 0.0479] → type_1
+    0_4_2: [0.8159, 0.1463, 0.0378] → type_0
+    1_2_2: [0.3467, 0.2719, 0.3814] → type_2
+    1_3_2: [0.4573, 0.2249, 0.3178] → type_0
+    1_4_2: [0.4426, 0.3424, 0.2149] → type_0
+    2_4_2: [0.1045, 0.0932, 0.8023] → type_2
+    3_4_2: [0.1845, 0.4963, 0.3192] → type_1
+    0_2_3: [0.3349, 0.3599, 0.3051] → type_1
+    1_2_3: [0.1561, 0.5984, 0.2455] → type_1
+    0_2_4: [0.1519, 0.3105, 0.5376] → type_2
+    1_2_4: [0.5629, 0.1823, 0.2549] → type_0
+    0_2_5: [0.0523, 0.1881, 0.7596] → type_2
+    1_2_5: [0.2391, 0.4701, 0.2908] → type_1
+  Sample 3:
+    0_2_0: [0.1050, 0.1548, 0.7402] → type_2
+    1_2_0: [0.2257, 0.5897, 0.1846] → type_1
+    0_2_1: [0.2443, 0.4091, 0.3466] → type_1
+    1_2_1: [0.3004, 0.2329, 0.4667] → type_2
+    0_2_2: [0.2757, 0.5278, 0.1964] → type_1
+    0_3_2: [0.7547, 0.0702, 0.1750] → type_0
+    0_4_2: [0.2025, 0.3556, 0.4419] → type_2
+    1_2_2: [0.1275, 0.7044, 0.1680] → type_1
+    1_3_2: [0.2797, 0.3833, 0.3370] → type_1
+    1_4_2: [0.8192, 0.0788, 0.1020] → type_0
+    2_4_2: [0.2929, 0.2409, 0.4663] → type_2
+    3_4_2: [0.4660, 0.2930, 0.2410] → type_0
+    0_2_3: [0.4842, 0.1557, 0.3601] → type_0
+    1_2_3: [0.0829, 0.8297, 0.0875] → type_1
+    0_2_4: [0.4292, 0.3441, 0.2267] → type_0
+    1_2_4: [0.1581, 0.5700, 0.2719] → type_1
+    0_2_5: [0.4382, 0.3810, 0.1808] → type_0
+    1_2_5: [0.1147, 0.1163, 0.7689] → type_2
+  Sample 4:
+    0_2_0: [0.1451, 0.1277, 0.7272] → type_2
+    1_2_0: [0.2063, 0.4430, 0.3506] → type_1
+    0_2_1: [0.3714, 0.2946, 0.3340] → type_0
+    1_2_1: [0.2053, 0.1472, 0.6476] → type_2
+    0_2_2: [0.4288, 0.2519, 0.3193] → type_0
+    0_3_2: [0.2914, 0.3925, 0.3160] → type_1
+    0_4_2: [0.5150, 0.3251, 0.1599] → type_0
+    1_2_2: [0.4132, 0.4250, 0.1618] → type_1
+    1_3_2: [0.1845, 0.6874, 0.1282] → type_1
+    1_4_2: [0.3110, 0.3594, 0.3296] → type_1
+    2_4_2: [0.1956, 0.2961, 0.5083] → type_2
+    3_4_2: [0.4665, 0.3180, 0.2155] → type_0
+    0_2_3: [0.4786, 0.3110, 0.2104] → type_0
+    1_2_3: [0.2435, 0.1215, 0.6350] → type_2
+    0_2_4: [0.4240, 0.1933, 0.3827] → type_0
+    1_2_4: [0.1521, 0.1518, 0.6961] → type_2
+    0_2_5: [0.2504, 0.2783, 0.4713] → type_2
+    1_2_5: [0.2024, 0.5760, 0.2216] → type_1
+
+Node Computations (inactive nodes only):
+  Node 2:
+    Average final probability: 0.895709
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→2: 0.523486 (gumbel_sample)
+          1→2: 0.527051 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.225367
+        FR-SIC: 1 - (1-0.537618) * 0.225367 = 0.895795
+
+      Sample 1:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→2: 0.522513 (gumbel_sample)
+          1→2: 0.526782 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.225955
+        FR-SIC: 1 - (1-0.537618) * 0.225955 = 0.895522
+
+      Sample 2:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→2: 0.523457 (gumbel_sample)
+          1→2: 0.528107 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.224877
+        FR-SIC: 1 - (1-0.537618) * 0.224877 = 0.896021
+
+      Sample 3:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→2: 0.522471 (gumbel_sample)
+          1→2: 0.526829 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.225953
+        FR-SIC: 1 - (1-0.537618) * 0.225953 = 0.895523
+
+      Sample 4:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→2: 0.523230 (gumbel_sample)
+          1→2: 0.526806 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.225604
+        FR-SIC: 1 - (1-0.537618) * 0.225604 = 0.895685
+
+  Node 3:
+    Average final probability: 0.894558
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→3: 0.518146 (gumbel_sample)
+          1→3: 0.524832 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.228962
+        FR-SIC: 1 - (1-0.537618) * 0.228962 = 0.894132
+
+      Sample 1:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→3: 0.519240 (gumbel_sample)
+          1→3: 0.525177 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.228276
+        FR-SIC: 1 - (1-0.537618) * 0.228276 = 0.894449
+
+      Sample 2:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→3: 0.519030 (gumbel_sample)
+          1→3: 0.526073 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.227945
+        FR-SIC: 1 - (1-0.537618) * 0.227945 = 0.894602
+
+      Sample 3:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→3: 0.519069 (gumbel_sample)
+          1→3: 0.526792 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.227581
+        FR-SIC: 1 - (1-0.537618) * 0.227581 = 0.894771
+
+      Sample 4:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→3: 0.520393 (gumbel_sample)
+          1→3: 0.525778 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.227440
+        FR-SIC: 1 - (1-0.537618) * 0.227440 = 0.894836
+
+  Node 4:
+    Average final probability: 0.893723
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→4: 0.518888 (gumbel_sample)
+          1→4: 0.522280 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.229837
+        FR-SIC: 1 - (1-0.537618) * 0.229837 = 0.893728
+
+      Sample 1:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→4: 0.518794 (gumbel_sample)
+          1→4: 0.524754 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.228691
+        FR-SIC: 1 - (1-0.537618) * 0.228691 = 0.894257
+
+      Sample 2:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→4: 0.516382 (gumbel_sample)
+          1→4: 0.522637 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.230862
+        FR-SIC: 1 - (1-0.537618) * 0.230862 = 0.893254
+
+      Sample 3:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→4: 0.519485 (gumbel_sample)
+          1→4: 0.521584 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.229886
+        FR-SIC: 1 - (1-0.537618) * 0.229886 = 0.893705
+
+      Sample 4:
+        Self-activation: 0.537618
+        Neighbor influences:
+          0→4: 0.517424 (gumbel_sample)
+          1→4: 0.523478 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.229958
+        FR-SIC: 1 - (1-0.537618) * 0.229958 = 0.893672
+
+
+
+TIMESTEP 3:
+----------------------------------------
+Gumbel Samples (5):
+  Sample 0:
+    0_3_0: [0.1727, 0.6834, 0.1439] → type_1
+    1_3_0: [0.1802, 0.0750, 0.7448] → type_2
+    0_3_1: [0.5939, 0.2161, 0.1900] → type_0
+    1_3_1: [0.3356, 0.2901, 0.3742] → type_2
+    0_3_2: [0.9400, 0.0046, 0.0553] → type_0
+    1_3_2: [0.3754, 0.5480, 0.0766] → type_1
+    0_2_3: [0.3733, 0.4188, 0.2080] → type_1
+    0_3_3: [0.5269, 0.2768, 0.1963] → type_0
+    0_4_3: [0.5746, 0.2944, 0.1310] → type_0
+    1_2_3: [0.4665, 0.1758, 0.3577] → type_0
+    1_3_3: [0.4295, 0.2729, 0.2977] → type_0
+    1_4_3: [0.2477, 0.1902, 0.5621] → type_2
+    2_4_3: [0.4207, 0.4163, 0.1629] → type_0
+    3_4_3: [0.1768, 0.5098, 0.3133] → type_1
+    0_3_4: [0.2927, 0.2662, 0.4412] → type_2
+    1_3_4: [0.4515, 0.3276, 0.2209] → type_0
+    0_3_5: [0.3855, 0.2465, 0.3680] → type_0
+    1_3_5: [0.3203, 0.3703, 0.3095] → type_1
+  Sample 1:
+    0_3_0: [0.1498, 0.6746, 0.1756] → type_1
+    1_3_0: [0.3572, 0.3776, 0.2651] → type_1
+    0_3_1: [0.3422, 0.2376, 0.4202] → type_2
+    1_3_1: [0.3043, 0.2205, 0.4753] → type_2
+    0_3_2: [0.6754, 0.1337, 0.1909] → type_0
+    1_3_2: [0.5374, 0.2444, 0.2182] → type_0
+    0_2_3: [0.0720, 0.1333, 0.7947] → type_2
+    0_3_3: [0.5947, 0.2009, 0.2044] → type_0
+    0_4_3: [0.1927, 0.5199, 0.2873] → type_1
+    1_2_3: [0.6199, 0.2103, 0.1697] → type_0
+    1_3_3: [0.2162, 0.6037, 0.1802] → type_1
+    1_4_3: [0.1569, 0.3391, 0.5040] → type_2
+    2_4_3: [0.1089, 0.1307, 0.7603] → type_2
+    3_4_3: [0.1535, 0.6805, 0.1660] → type_1
+    0_3_4: [0.3433, 0.2036, 0.4530] → type_2
+    1_3_4: [0.3569, 0.1802, 0.4629] → type_2
+    0_3_5: [0.2350, 0.2867, 0.4783] → type_2
+    1_3_5: [0.4973, 0.2454, 0.2573] → type_0
+  Sample 2:
+    0_3_0: [0.2284, 0.5947, 0.1769] → type_1
+    1_3_0: [0.4846, 0.1668, 0.3486] → type_0
+    0_3_1: [0.1444, 0.1684, 0.6872] → type_2
+    1_3_1: [0.4115, 0.3026, 0.2859] → type_0
+    0_3_2: [0.0129, 0.9392, 0.0479] → type_1
+    1_3_2: [0.4573, 0.2249, 0.3178] → type_0
+    0_2_3: [0.3349, 0.3599, 0.3051] → type_1
+    0_3_3: [0.2882, 0.2363, 0.4755] → type_2
+    0_4_3: [0.1047, 0.0920, 0.8032] → type_2
+    1_2_3: [0.1561, 0.5984, 0.2455] → type_1
+    1_3_3: [0.2786, 0.2720, 0.4494] → type_2
+    1_4_3: [0.5219, 0.2189, 0.2591] → type_0
+    2_4_3: [0.7228, 0.1289, 0.1483] → type_0
+    3_4_3: [0.3964, 0.2861, 0.3175] → type_0
+    0_3_4: [0.2313, 0.4009, 0.3677] → type_1
+    1_3_4: [0.3544, 0.3842, 0.2614] → type_1
+    0_3_5: [0.1621, 0.3497, 0.4883] → type_2
+    1_3_5: [0.4796, 0.2066, 0.3138] → type_0
+  Sample 3:
+    0_3_0: [0.2667, 0.4350, 0.2983] → type_1
+    1_3_0: [0.1463, 0.4848, 0.3689] → type_1
+    0_3_1: [0.2842, 0.1657, 0.5501] → type_2
+    1_3_1: [0.2474, 0.5142, 0.2384] → type_1
+    0_3_2: [0.7547, 0.0702, 0.1750] → type_0
+    1_3_2: [0.2797, 0.3833, 0.3370] → type_1
+    0_2_3: [0.4842, 0.1557, 0.3601] → type_0
+    0_3_3: [0.3092, 0.2104, 0.4804] → type_2
+    0_4_3: [0.1425, 0.7049, 0.1527] → type_1
+    1_2_3: [0.0829, 0.8297, 0.0875] → type_1
+    1_3_3: [0.5010, 0.2273, 0.2717] → type_0
+    1_4_3: [0.5859, 0.2551, 0.1589] → type_0
+    2_4_3: [0.3061, 0.2909, 0.4030] → type_2
+    3_4_3: [0.0600, 0.1147, 0.8253] → type_2
+    0_3_4: [0.4157, 0.1372, 0.4471] → type_2
+    1_3_4: [0.2313, 0.4889, 0.2799] → type_1
+    0_3_5: [0.1274, 0.1332, 0.7394] → type_2
+    1_3_5: [0.2814, 0.3035, 0.4151] → type_2
+  Sample 4:
+    0_3_0: [0.1086, 0.1767, 0.7147] → type_2
+    1_3_0: [0.2800, 0.1249, 0.5951] → type_2
+    0_3_1: [0.2775, 0.3033, 0.4192] → type_2
+    1_3_1: [0.3253, 0.4055, 0.2692] → type_1
+    0_3_2: [0.2914, 0.3925, 0.3160] → type_1
+    1_3_2: [0.1845, 0.6874, 0.1282] → type_1
+    0_2_3: [0.4786, 0.3110, 0.2104] → type_0
+    0_3_3: [0.1799, 0.5076, 0.3125] → type_1
+    0_4_3: [0.4696, 0.3621, 0.1683] → type_0
+    1_2_3: [0.2435, 0.1215, 0.6350] → type_2
+    1_3_3: [0.2312, 0.4862, 0.2826] → type_1
+    1_4_3: [0.7777, 0.1668, 0.0554] → type_0
+    2_4_3: [0.2101, 0.3488, 0.4411] → type_2
+    3_4_3: [0.3048, 0.1376, 0.5576] → type_2
+    0_3_4: [0.2886, 0.5544, 0.1570] → type_1
+    1_3_4: [0.4610, 0.2100, 0.3290] → type_0
+    0_3_5: [0.3657, 0.3048, 0.3296] → type_0
+    1_3_5: [0.2228, 0.1849, 0.5923] → type_2
+
+Node Computations (inactive nodes only):
+  Node 3:
+    Average final probability: 0.951665
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→3: 0.525673 (gumbel_sample)
+          1→3: 0.528378 (gumbel_sample)
+          2→3: 0.538151 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.103317
+        FR-SIC: 1 - (1-0.531015) * 0.103317 = 0.951546
+
+      Sample 1:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→3: 0.525763 (gumbel_sample)
+          1→3: 0.527497 (gumbel_sample)
+          2→3: 0.538151 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.103490
+        FR-SIC: 1 - (1-0.531015) * 0.103490 = 0.951464
+
+      Sample 2:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→3: 0.527697 (gumbel_sample)
+          1→3: 0.530037 (gumbel_sample)
+          2→3: 0.538151 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.102514
+        FR-SIC: 1 - (1-0.531015) * 0.102514 = 0.951922
+
+      Sample 3:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→3: 0.527689 (gumbel_sample)
+          1→3: 0.528056 (gumbel_sample)
+          2→3: 0.538151 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.102948
+        FR-SIC: 1 - (1-0.531015) * 0.102948 = 0.951719
+
+      Sample 4:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→3: 0.526790 (gumbel_sample)
+          1→3: 0.528489 (gumbel_sample)
+          2→3: 0.538151 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.103049
+        FR-SIC: 1 - (1-0.531015) * 0.103049 = 0.951671
+
+  Node 4:
+    Average final probability: 0.950997
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→4: 0.524108 (gumbel_sample)
+          1→4: 0.528369 (gumbel_sample)
+          2→4: 0.533215 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.104768
+        FR-SIC: 1 - (1-0.531015) * 0.104768 = 0.950865
+
+      Sample 1:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→4: 0.525327 (gumbel_sample)
+          1→4: 0.528148 (gumbel_sample)
+          2→4: 0.537799 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.103522
+        FR-SIC: 1 - (1-0.531015) * 0.103522 = 0.951450
+
+      Sample 2:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→4: 0.529219 (gumbel_sample)
+          1→4: 0.526102 (gumbel_sample)
+          2→4: 0.532086 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.104393
+        FR-SIC: 1 - (1-0.531015) * 0.104393 = 0.951041
+
+      Sample 3:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→4: 0.524141 (gumbel_sample)
+          1→4: 0.525447 (gumbel_sample)
+          2→4: 0.535493 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.104895
+        FR-SIC: 1 - (1-0.531015) * 0.104895 = 0.950806
+
+      Sample 4:
+        Self-activation: 0.531015
+        Neighbor influences:
+          0→4: 0.524432 (gumbel_sample)
+          1→4: 0.524833 (gumbel_sample)
+          2→4: 0.535971 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.104858
+        FR-SIC: 1 - (1-0.531015) * 0.104858 = 0.950823
+
+
+
+TIMESTEP 4:
+----------------------------------------
+Gumbel Samples (5):
+  Sample 0:
+    0_4_0: [0.2899, 0.4660, 0.2441] → type_1
+    1_4_0: [0.5668, 0.1826, 0.2506] → type_0
+    2_4_0: [0.4464, 0.3752, 0.1784] → type_0
+    3_4_0: [0.2263, 0.5375, 0.2362] → type_1
+    0_4_1: [0.3591, 0.3928, 0.2481] → type_1
+    1_4_1: [0.2175, 0.2621, 0.5204] → type_2
+    2_4_1: [0.5008, 0.2622, 0.2370] → type_0
+    3_4_1: [0.3500, 0.2923, 0.3576] → type_2
+    0_4_2: [0.2595, 0.3852, 0.3553] → type_1
+    1_4_2: [0.2982, 0.5642, 0.1376] → type_1
+    2_4_2: [0.7434, 0.1104, 0.1462] → type_0
+    3_4_2: [0.4889, 0.3203, 0.1908] → type_0
+    0_4_3: [0.5746, 0.2944, 0.1310] → type_0
+    1_4_3: [0.2477, 0.1902, 0.5621] → type_2
+    2_4_3: [0.4207, 0.4163, 0.1629] → type_0
+    3_4_3: [0.1768, 0.5098, 0.3133] → type_1
+    0_2_4: [0.1466, 0.5155, 0.3379] → type_1
+    0_3_4: [0.2927, 0.2662, 0.4412] → type_2
+    0_4_4: [0.2965, 0.3320, 0.3715] → type_2
+    1_2_4: [0.4065, 0.2091, 0.3844] → type_0
+    1_3_4: [0.4515, 0.3276, 0.2209] → type_0
+    1_4_4: [0.3101, 0.2739, 0.4160] → type_2
+    2_4_4: [0.1236, 0.4080, 0.4683] → type_2
+    3_4_4: [0.2779, 0.1675, 0.5546] → type_2
+    0_4_5: [0.1115, 0.1946, 0.6939] → type_2
+    1_4_5: [0.3062, 0.5174, 0.1764] → type_1
+    2_4_5: [0.4235, 0.2228, 0.3537] → type_0
+    3_4_5: [0.2671, 0.3430, 0.3899] → type_2
+  Sample 1:
+    0_4_0: [0.2144, 0.2779, 0.5077] → type_2
+    1_4_0: [0.2810, 0.4425, 0.2765] → type_1
+    2_4_0: [0.3545, 0.4452, 0.2003] → type_1
+    3_4_0: [0.4320, 0.3028, 0.2652] → type_0
+    0_4_1: [0.2032, 0.2903, 0.5065] → type_2
+    1_4_1: [0.4299, 0.2237, 0.3464] → type_0
+    2_4_1: [0.1277, 0.4957, 0.3766] → type_1
+    3_4_1: [0.3910, 0.2669, 0.3421] → type_0
+    0_4_2: [0.2897, 0.3656, 0.3447] → type_1
+    1_4_2: [0.2239, 0.2563, 0.5197] → type_2
+    2_4_2: [0.1450, 0.6662, 0.1888] → type_1
+    3_4_2: [0.3704, 0.3056, 0.3241] → type_0
+    0_4_3: [0.1927, 0.5199, 0.2873] → type_1
+    1_4_3: [0.1569, 0.3391, 0.5040] → type_2
+    2_4_3: [0.1089, 0.1307, 0.7603] → type_2
+    3_4_3: [0.1535, 0.6805, 0.1660] → type_1
+    0_2_4: [0.2394, 0.1638, 0.5968] → type_2
+    0_3_4: [0.3433, 0.2036, 0.4530] → type_2
+    0_4_4: [0.1533, 0.6544, 0.1923] → type_1
+    1_2_4: [0.3535, 0.1073, 0.5392] → type_2
+    1_3_4: [0.3569, 0.1802, 0.4629] → type_2
+    1_4_4: [0.3327, 0.4604, 0.2069] → type_1
+    2_4_4: [0.6379, 0.2282, 0.1339] → type_0
+    3_4_4: [0.0754, 0.0413, 0.8833] → type_2
+    0_4_5: [0.2679, 0.3664, 0.3657] → type_1
+    1_4_5: [0.4155, 0.1276, 0.4569] → type_2
+    2_4_5: [0.1442, 0.1360, 0.7199] → type_2
+    3_4_5: [0.3387, 0.2159, 0.4454] → type_2
+  Sample 2:
+    0_4_0: [0.2315, 0.2491, 0.5194] → type_2
+    1_4_0: [0.6940, 0.2067, 0.0993] → type_0
+    2_4_0: [0.3637, 0.5077, 0.1285] → type_1
+    3_4_0: [0.4538, 0.3993, 0.1469] → type_0
+    0_4_1: [0.2868, 0.4184, 0.2948] → type_1
+    1_4_1: [0.2519, 0.2666, 0.4815] → type_2
+    2_4_1: [0.2205, 0.2684, 0.5110] → type_2
+    3_4_1: [0.4859, 0.0547, 0.4593] → type_0
+    0_4_2: [0.8159, 0.1463, 0.0378] → type_0
+    1_4_2: [0.4426, 0.3424, 0.2149] → type_0
+    2_4_2: [0.1045, 0.0932, 0.8023] → type_2
+    3_4_2: [0.1845, 0.4963, 0.3192] → type_1
+    0_4_3: [0.1047, 0.0920, 0.8032] → type_2
+    1_4_3: [0.5219, 0.2189, 0.2591] → type_0
+    2_4_3: [0.7228, 0.1289, 0.1483] → type_0
+    3_4_3: [0.3964, 0.2861, 0.3175] → type_0
+    0_2_4: [0.1519, 0.3105, 0.5376] → type_2
+    0_3_4: [0.2313, 0.4009, 0.3677] → type_1
+    0_4_4: [0.1957, 0.1978, 0.6065] → type_2
+    1_2_4: [0.5629, 0.1823, 0.2549] → type_0
+    1_3_4: [0.3544, 0.3842, 0.2614] → type_1
+    1_4_4: [0.6893, 0.1610, 0.1497] → type_0
+    2_4_4: [0.2595, 0.5091, 0.2313] → type_1
+    3_4_4: [0.1814, 0.1721, 0.6465] → type_2
+    0_4_5: [0.7428, 0.1038, 0.1534] → type_0
+    1_4_5: [0.1589, 0.4290, 0.4122] → type_1
+    2_4_5: [0.3479, 0.2203, 0.4317] → type_2
+    3_4_5: [0.6231, 0.2436, 0.1334] → type_0
+  Sample 3:
+    0_4_0: [0.4348, 0.1375, 0.4277] → type_0
+    1_4_0: [0.3542, 0.2501, 0.3957] → type_2
+    2_4_0: [0.3066, 0.2425, 0.4509] → type_2
+    3_4_0: [0.3652, 0.2249, 0.4098] → type_2
+    0_4_1: [0.2395, 0.4037, 0.3568] → type_1
+    1_4_1: [0.5704, 0.2650, 0.1645] → type_0
+    2_4_1: [0.2321, 0.2368, 0.5311] → type_2
+    3_4_1: [0.5088, 0.1949, 0.2962] → type_0
+    0_4_2: [0.2025, 0.3556, 0.4419] → type_2
+    1_4_2: [0.8192, 0.0788, 0.1020] → type_0
+    2_4_2: [0.2929, 0.2409, 0.4663] → type_2
+    3_4_2: [0.4660, 0.2930, 0.2410] → type_0
+    0_4_3: [0.1425, 0.7049, 0.1527] → type_1
+    1_4_3: [0.5859, 0.2551, 0.1589] → type_0
+    2_4_3: [0.3061, 0.2909, 0.4030] → type_2
+    3_4_3: [0.0600, 0.1147, 0.8253] → type_2
+    0_2_4: [0.4292, 0.3441, 0.2267] → type_0
+    0_3_4: [0.4157, 0.1372, 0.4471] → type_2
+    0_4_4: [0.1354, 0.1089, 0.7557] → type_2
+    1_2_4: [0.1581, 0.5700, 0.2719] → type_1
+    1_3_4: [0.2313, 0.4889, 0.2799] → type_1
+    1_4_4: [0.2369, 0.1373, 0.6258] → type_2
+    2_4_4: [0.2331, 0.4188, 0.3481] → type_1
+    3_4_4: [0.0679, 0.2497, 0.6824] → type_2
+    0_4_5: [0.1248, 0.7676, 0.1076] → type_1
+    1_4_5: [0.4263, 0.2493, 0.3244] → type_0
+    2_4_5: [0.2269, 0.3742, 0.3989] → type_2
+    3_4_5: [0.6468, 0.1233, 0.2299] → type_0
+  Sample 4:
+    0_4_0: [0.2101, 0.5378, 0.2521] → type_1
+    1_4_0: [0.1948, 0.3494, 0.4558] → type_2
+    2_4_0: [0.4000, 0.3449, 0.2551] → type_0
+    3_4_0: [0.2352, 0.5886, 0.1762] → type_1
+    0_4_1: [0.6663, 0.0955, 0.2382] → type_0
+    1_4_1: [0.1816, 0.3267, 0.4917] → type_2
+    2_4_1: [0.4166, 0.2248, 0.3586] → type_0
+    3_4_1: [0.2565, 0.2949, 0.4485] → type_2
+    0_4_2: [0.5150, 0.3251, 0.1599] → type_0
+    1_4_2: [0.3110, 0.3594, 0.3296] → type_1
+    2_4_2: [0.1956, 0.2961, 0.5083] → type_2
+    3_4_2: [0.4665, 0.3180, 0.2155] → type_0
+    0_4_3: [0.4696, 0.3621, 0.1683] → type_0
+    1_4_3: [0.7777, 0.1668, 0.0554] → type_0
+    2_4_3: [0.2101, 0.3488, 0.4411] → type_2
+    3_4_3: [0.3048, 0.1376, 0.5576] → type_2
+    0_2_4: [0.4240, 0.1933, 0.3827] → type_0
+    0_3_4: [0.2886, 0.5544, 0.1570] → type_1
+    0_4_4: [0.1137, 0.1040, 0.7824] → type_2
+    1_2_4: [0.1521, 0.1518, 0.6961] → type_2
+    1_3_4: [0.4610, 0.2100, 0.3290] → type_0
+    1_4_4: [0.1603, 0.1559, 0.6838] → type_2
+    2_4_4: [0.6176, 0.2359, 0.1465] → type_0
+    3_4_4: [0.7887, 0.0330, 0.1782] → type_0
+    0_4_5: [0.3350, 0.4027, 0.2623] → type_1
+    1_4_5: [0.1362, 0.7800, 0.0838] → type_1
+    2_4_5: [0.1348, 0.1500, 0.7152] → type_2
+    3_4_5: [0.1643, 0.5440, 0.2917] → type_1
+
+Node Computations (inactive nodes only):
+  Node 4:
+    Average final probability: 0.978125
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.527029
+        Neighbor influences:
+          0→4: 0.529153 (gumbel_sample)
+          1→4: 0.533424 (gumbel_sample)
+          2→4: 0.538415 (gumbel_sample)
+          3→4: 0.544583 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.046181
+        FR-SIC: 1 - (1-0.527029) * 0.046181 = 0.978158
+
+      Sample 1:
+        Self-activation: 0.527029
+        Neighbor influences:
+          0→4: 0.527492 (gumbel_sample)
+          1→4: 0.531425 (gumbel_sample)
+          2→4: 0.535203 (gumbel_sample)
+          3→4: 0.545039 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.046819
+        FR-SIC: 1 - (1-0.527029) * 0.046819 = 0.977856
+
+      Sample 2:
+        Self-activation: 0.527029
+        Neighbor influences:
+          0→4: 0.531010 (gumbel_sample)
+          1→4: 0.530176 (gumbel_sample)
+          2→4: 0.536165 (gumbel_sample)
+          3→4: 0.544857 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.046517
+        FR-SIC: 1 - (1-0.527029) * 0.046517 = 0.977999
+
+      Sample 3:
+        Self-activation: 0.527029
+        Neighbor influences:
+          0→4: 0.532194 (gumbel_sample)
+          1→4: 0.535539 (gumbel_sample)
+          2→4: 0.537393 (gumbel_sample)
+          3→4: 0.545240 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.045710
+        FR-SIC: 1 - (1-0.527029) * 0.045710 = 0.978381
+
+      Sample 4:
+        Self-activation: 0.527029
+        Neighbor influences:
+          0→4: 0.532393 (gumbel_sample)
+          1→4: 0.536246 (gumbel_sample)
+          2→4: 0.535332 (gumbel_sample)
+          3→4: 0.543209 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.046029
+        FR-SIC: 1 - (1-0.527029) * 0.046029 = 0.978230
+
+
+
+============================================================
+EPOCH 1
+============================================================
+
+TIMESTEP 0:
+----------------------------------------
+Gumbel Samples (3):
+  Sample 0:
+    0_2_0: [0.0339, 0.8968, 0.0693] → type_1
+    0_3_0: [0.5528, 0.0821, 0.3651] → type_0
+    0_4_0: [0.9052, 0.0457, 0.0491] → type_0
+    1_2_0: [0.8066, 0.0022, 0.1912] → type_0
+    1_3_0: [0.2446, 0.4523, 0.3031] → type_1
+    1_4_0: [0.9864, 0.0099, 0.0037] → type_0
+    2_4_0: [0.0608, 0.8312, 0.1080] → type_1
+    3_4_0: [0.4546, 0.3847, 0.1606] → type_0
+  Sample 1:
+    0_2_0: [0.0472, 0.7512, 0.2016] → type_1
+    0_3_0: [0.0262, 0.2901, 0.6837] → type_2
+    0_4_0: [0.2675, 0.7084, 0.0241] → type_1
+    1_2_0: [0.3458, 0.1310, 0.5232] → type_2
+    1_3_0: [0.0695, 0.6949, 0.2357] → type_1
+    1_4_0: [0.1411, 0.6554, 0.2035] → type_1
+    2_4_0: [0.0312, 0.9002, 0.0687] → type_1
+    3_4_0: [0.6544, 0.2557, 0.0899] → type_0
+  Sample 2:
+    0_2_0: [0.1702, 0.0285, 0.8012] → type_2
+    0_3_0: [0.0307, 0.0944, 0.8749] → type_2
+    0_4_0: [0.0144, 0.7354, 0.2503] → type_1
+    1_2_0: [0.6283, 0.1610, 0.2107] → type_0
+    1_3_0: [0.4599, 0.5330, 0.0071] → type_1
+    1_4_0: [0.4199, 0.3028, 0.2772] → type_0
+    2_4_0: [0.0163, 0.3548, 0.6290] → type_2
+    3_4_0: [0.2133, 0.0597, 0.7270] → type_2
+
+Node Computations (inactive nodes only):
+  Node 0:
+    Average final probability: 0.542609
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 1:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 2:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+  Node 1:
+    Average final probability: 0.542609
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 1:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 2:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+  Node 2:
+    Average final probability: 0.542609
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 1:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 2:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+  Node 3:
+    Average final probability: 0.542609
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 1:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 2:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+  Node 4:
+    Average final probability: 0.542609
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 1:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+      Sample 2:
+        Self-activation: 0.542609
+        No active neighbors
+        Final = Self: 0.542609
+
+
+
+TIMESTEP 1:
+----------------------------------------
+Gumbel Samples (3):
+  Sample 0:
+    0_2_1: [0.0094, 0.5617, 0.4289] → type_1
+    0_3_1: [0.0327, 0.9226, 0.0447] → type_1
+    0_4_1: [0.7846, 0.1442, 0.0712] → type_0
+    1_2_1: [0.8973, 0.0209, 0.0818] → type_0
+    1_3_1: [0.3304, 0.1880, 0.4816] → type_2
+    1_4_1: [0.0302, 0.8150, 0.1548] → type_1
+    2_4_1: [0.1534, 0.0143, 0.8323] → type_2
+    3_4_1: [0.4797, 0.2915, 0.2288] → type_0
+  Sample 1:
+    0_2_1: [0.6802, 0.2663, 0.0535] → type_0
+    0_3_1: [0.3368, 0.5098, 0.1534] → type_1
+    0_4_1: [0.4962, 0.4195, 0.0843] → type_0
+    1_2_1: [0.3970, 0.4739, 0.1292] → type_1
+    1_3_1: [0.4874, 0.0583, 0.4543] → type_0
+    1_4_1: [0.0947, 0.6989, 0.2064] → type_1
+    2_4_1: [0.2152, 0.0338, 0.7510] → type_2
+    3_4_1: [0.9846, 0.0012, 0.0142] → type_0
+  Sample 2:
+    0_2_1: [0.9416, 0.0149, 0.0435] → type_0
+    0_3_1: [0.9331, 0.0169, 0.0500] → type_0
+    0_4_1: [0.4100, 0.1397, 0.4503] → type_2
+    1_2_1: [0.0064, 0.9868, 0.0068] → type_1
+    1_3_1: [0.1375, 0.2890, 0.5735] → type_2
+    1_4_1: [0.0583, 0.4135, 0.5282] → type_2
+    2_4_1: [0.0457, 0.0113, 0.9430] → type_2
+    3_4_1: [0.6556, 0.0567, 0.2876] → type_0
+
+Node Computations (inactive nodes only):
+  Node 1:
+    Average final probability: 0.781431
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→1: 0.520803 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.479197
+        FR-SIC: 1 - (1-0.543884) * 0.479197 = 0.781431
+
+      Sample 1:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→1: 0.520803 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.479197
+        FR-SIC: 1 - (1-0.543884) * 0.479197 = 0.781431
+
+      Sample 2:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→1: 0.520803 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.479197
+        FR-SIC: 1 - (1-0.543884) * 0.479197 = 0.781431
+
+  Node 2:
+    Average final probability: 0.778710
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→2: 0.517412 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.482588
+        FR-SIC: 1 - (1-0.543884) * 0.482588 = 0.779884
+
+      Sample 1:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→2: 0.513717 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.486283
+        FR-SIC: 1 - (1-0.543884) * 0.486283 = 0.778198
+
+      Sample 2:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→2: 0.513387 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.486613
+        FR-SIC: 1 - (1-0.543884) * 0.486613 = 0.778048
+
+  Node 3:
+    Average final probability: 0.777437
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→3: 0.512217 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.487783
+        FR-SIC: 1 - (1-0.543884) * 0.487783 = 0.777514
+
+      Sample 1:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→3: 0.512603 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.487397
+        FR-SIC: 1 - (1-0.543884) * 0.487397 = 0.777690
+
+      Sample 2:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→3: 0.511320 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.488680
+        FR-SIC: 1 - (1-0.543884) * 0.488680 = 0.777105
+
+  Node 4:
+    Average final probability: 0.776705
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→4: 0.509373 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.490627
+        FR-SIC: 1 - (1-0.543884) * 0.490627 = 0.776217
+
+      Sample 1:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→4: 0.509756 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.490244
+        FR-SIC: 1 - (1-0.543884) * 0.490244 = 0.776392
+
+      Sample 2:
+        Self-activation: 0.543884
+        Neighbor influences:
+          0→4: 0.512202 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.487798
+        FR-SIC: 1 - (1-0.543884) * 0.487798 = 0.777507
+
+
+
+TIMESTEP 2:
+----------------------------------------
+Gumbel Samples (3):
+  Sample 0:
+    0_2_0: [0.0339, 0.8968, 0.0693] → type_1
+    1_2_0: [0.8066, 0.0022, 0.1912] → type_0
+    0_2_1: [0.0094, 0.5617, 0.4289] → type_1
+    1_2_1: [0.8973, 0.0209, 0.0818] → type_0
+    0_2_2: [0.2467, 0.2436, 0.5097] → type_2
+    0_3_2: [0.1317, 0.8478, 0.0205] → type_1
+    0_4_2: [0.0000, 1.0000, 0.0000] → type_1
+    1_2_2: [0.9063, 0.0434, 0.0504] → type_0
+    1_3_2: [0.9974, 0.0018, 0.0007] → type_0
+    1_4_2: [0.4657, 0.0709, 0.4634] → type_0
+    2_4_2: [0.9679, 0.0257, 0.0064] → type_0
+    3_4_2: [0.0424, 0.2261, 0.7315] → type_2
+    0_2_3: [0.4680, 0.0692, 0.4628] → type_0
+    1_2_3: [0.3700, 0.5846, 0.0454] → type_1
+    0_2_4: [0.6666, 0.2770, 0.0565] → type_0
+    1_2_4: [0.0438, 0.0852, 0.8710] → type_2
+    0_2_5: [0.7136, 0.1551, 0.1314] → type_0
+    1_2_5: [0.1391, 0.6478, 0.2131] → type_1
+  Sample 1:
+    0_2_0: [0.0472, 0.7512, 0.2016] → type_1
+    1_2_0: [0.3458, 0.1310, 0.5232] → type_2
+    0_2_1: [0.6802, 0.2663, 0.0535] → type_0
+    1_2_1: [0.3970, 0.4739, 0.1292] → type_1
+    0_2_2: [0.4022, 0.5595, 0.0384] → type_1
+    0_3_2: [0.9697, 0.0128, 0.0175] → type_0
+    0_4_2: [0.4771, 0.1340, 0.3889] → type_0
+    1_2_2: [0.4314, 0.2854, 0.2832] → type_0
+    1_3_2: [0.0309, 0.0165, 0.9526] → type_2
+    1_4_2: [0.3577, 0.3720, 0.2703] → type_1
+    2_4_2: [0.8679, 0.0052, 0.1269] → type_0
+    3_4_2: [0.4860, 0.0179, 0.4961] → type_2
+    0_2_3: [0.1871, 0.6234, 0.1895] → type_1
+    1_2_3: [0.2092, 0.3801, 0.4106] → type_2
+    0_2_4: [0.0020, 0.0251, 0.9729] → type_2
+    1_2_4: [0.1846, 0.7018, 0.1136] → type_1
+    0_2_5: [0.2307, 0.6434, 0.1259] → type_1
+    1_2_5: [0.0411, 0.1175, 0.8413] → type_2
+  Sample 2:
+    0_2_0: [0.1702, 0.0285, 0.8012] → type_2
+    1_2_0: [0.6283, 0.1610, 0.2107] → type_0
+    0_2_1: [0.9416, 0.0149, 0.0435] → type_0
+    1_2_1: [0.0064, 0.9868, 0.0068] → type_1
+    0_2_2: [0.3793, 0.1860, 0.4347] → type_2
+    0_3_2: [0.4036, 0.3421, 0.2544] → type_0
+    0_4_2: [0.0855, 0.5691, 0.3455] → type_1
+    1_2_2: [0.6089, 0.1378, 0.2534] → type_0
+    1_3_2: [0.9972, 0.0013, 0.0015] → type_0
+    1_4_2: [0.1555, 0.1598, 0.6847] → type_2
+    2_4_2: [0.1724, 0.0665, 0.7611] → type_2
+    3_4_2: [0.2637, 0.6756, 0.0607] → type_1
+    0_2_3: [0.1532, 0.2748, 0.5720] → type_2
+    1_2_3: [0.5350, 0.4184, 0.0466] → type_0
+    0_2_4: [0.2799, 0.7123, 0.0079] → type_1
+    1_2_4: [0.1986, 0.4491, 0.3523] → type_1
+    0_2_5: [0.4866, 0.2199, 0.2934] → type_0
+    1_2_5: [0.1771, 0.8070, 0.0159] → type_1
+
+Node Computations (inactive nodes only):
+  Node 2:
+    Average final probability: 0.894610
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.536057
+        Neighbor influences:
+          0→2: 0.522226 (gumbel_sample)
+          1→2: 0.524514 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.227174
+        FR-SIC: 1 - (1-0.536057) * 0.227174 = 0.894604
+
+      Sample 1:
+        Self-activation: 0.536057
+        Neighbor influences:
+          0→2: 0.518889 (gumbel_sample)
+          1→2: 0.526457 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.227827
+        FR-SIC: 1 - (1-0.536057) * 0.227827 = 0.894301
+
+      Sample 2:
+        Self-activation: 0.536057
+        Neighbor influences:
+          0→2: 0.522061 (gumbel_sample)
+          1→2: 0.526133 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.226479
+        FR-SIC: 1 - (1-0.536057) * 0.226479 = 0.894926
+
+  Node 3:
+    Average final probability: 0.892867
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.536057
+        Neighbor influences:
+          0→3: 0.515996 (gumbel_sample)
+          1→3: 0.520239 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.232207
+        FR-SIC: 1 - (1-0.536057) * 0.232207 = 0.892269
+
+      Sample 1:
+        Self-activation: 0.536057
+        Neighbor influences:
+          0→3: 0.515064 (gumbel_sample)
+          1→3: 0.527987 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.228896
+        FR-SIC: 1 - (1-0.536057) * 0.228896 = 0.893805
+
+      Sample 2:
+        Self-activation: 0.536057
+        Neighbor influences:
+          0→3: 0.517151 (gumbel_sample)
+          1→3: 0.520244 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.231650
+        FR-SIC: 1 - (1-0.536057) * 0.231650 = 0.892528
+
+  Node 4:
+    Average final probability: 0.892471
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.536057
+        Neighbor influences:
+          0→4: 0.513874 (gumbel_sample)
+          1→4: 0.521673 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.232527
+        FR-SIC: 1 - (1-0.536057) * 0.232527 = 0.892120
+
+      Sample 1:
+        Self-activation: 0.536057
+        Neighbor influences:
+          0→4: 0.515876 (gumbel_sample)
+          1→4: 0.520551 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.232113
+        FR-SIC: 1 - (1-0.536057) * 0.232113 = 0.892313
+
+      Sample 2:
+        Self-activation: 0.536057
+        Neighbor influences:
+          0→4: 0.515998 (gumbel_sample)
+          1→4: 0.523398 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.230676
+        FR-SIC: 1 - (1-0.536057) * 0.230676 = 0.892979
+
+
+
+TIMESTEP 3:
+----------------------------------------
+Gumbel Samples (3):
+  Sample 0:
+    0_3_0: [0.5528, 0.0821, 0.3651] → type_0
+    1_3_0: [0.2446, 0.4523, 0.3031] → type_1
+    0_3_1: [0.0327, 0.9226, 0.0447] → type_1
+    1_3_1: [0.3304, 0.1880, 0.4816] → type_2
+    0_3_2: [0.1317, 0.8478, 0.0205] → type_1
+    1_3_2: [0.9974, 0.0018, 0.0007] → type_0
+    0_2_3: [0.4680, 0.0692, 0.4628] → type_0
+    0_3_3: [0.3508, 0.5988, 0.0503] → type_1
+    0_4_3: [0.1832, 0.2371, 0.5797] → type_2
+    1_2_3: [0.3700, 0.5846, 0.0454] → type_1
+    1_3_3: [0.0701, 0.8039, 0.1260] → type_1
+    1_4_3: [0.3473, 0.0920, 0.5607] → type_2
+    2_4_3: [0.3334, 0.2771, 0.3895] → type_2
+    3_4_3: [0.0963, 0.4262, 0.4775] → type_2
+    0_3_4: [0.9222, 0.0549, 0.0229] → type_0
+    1_3_4: [0.5791, 0.1878, 0.2331] → type_0
+    0_3_5: [0.9612, 0.0304, 0.0084] → type_0
+    1_3_5: [0.5608, 0.0623, 0.3769] → type_0
+  Sample 1:
+    0_3_0: [0.0262, 0.2901, 0.6837] → type_2
+    1_3_0: [0.0695, 0.6949, 0.2357] → type_1
+    0_3_1: [0.3368, 0.5098, 0.1534] → type_1
+    1_3_1: [0.4874, 0.0583, 0.4543] → type_0
+    0_3_2: [0.9697, 0.0128, 0.0175] → type_0
+    1_3_2: [0.0309, 0.0165, 0.9526] → type_2
+    0_2_3: [0.1871, 0.6234, 0.1895] → type_1
+    0_3_3: [0.0104, 0.9790, 0.0106] → type_1
+    0_4_3: [0.0965, 0.2146, 0.6888] → type_2
+    1_2_3: [0.2092, 0.3801, 0.4106] → type_2
+    1_3_3: [0.4232, 0.4205, 0.1563] → type_0
+    1_4_3: [0.7380, 0.0965, 0.1655] → type_0
+    2_4_3: [0.1009, 0.1143, 0.7847] → type_2
+    3_4_3: [0.0352, 0.8062, 0.1586] → type_1
+    0_3_4: [0.0000, 0.0062, 0.9938] → type_2
+    1_3_4: [0.9188, 0.0007, 0.0805] → type_0
+    0_3_5: [0.8726, 0.0442, 0.0833] → type_0
+    1_3_5: [0.0301, 0.6366, 0.3333] → type_1
+  Sample 2:
+    0_3_0: [0.0307, 0.0944, 0.8749] → type_2
+    1_3_0: [0.4599, 0.5330, 0.0071] → type_1
+    0_3_1: [0.9331, 0.0169, 0.0500] → type_0
+    1_3_1: [0.1375, 0.2890, 0.5735] → type_2
+    0_3_2: [0.4036, 0.3421, 0.2544] → type_0
+    1_3_2: [0.9972, 0.0013, 0.0015] → type_0
+    0_2_3: [0.1532, 0.2748, 0.5720] → type_2
+    0_3_3: [0.1522, 0.0760, 0.7718] → type_2
+    0_4_3: [0.0433, 0.0022, 0.9545] → type_2
+    1_2_3: [0.5350, 0.4184, 0.0466] → type_0
+    1_3_3: [0.2133, 0.4397, 0.3470] → type_1
+    1_4_3: [0.0823, 0.1985, 0.7192] → type_2
+    2_4_3: [0.7742, 0.1303, 0.0955] → type_0
+    3_4_3: [0.1280, 0.1304, 0.7416] → type_2
+    0_3_4: [0.7878, 0.0302, 0.1820] → type_0
+    1_3_4: [0.0655, 0.0484, 0.8861] → type_2
+    0_3_5: [0.0141, 0.0087, 0.9773] → type_2
+    1_3_5: [0.1527, 0.3393, 0.5080] → type_2
+
+Node Computations (inactive nodes only):
+  Node 3:
+    Average final probability: 0.950786
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.529137
+        Neighbor influences:
+          0→3: 0.521881 (gumbel_sample)
+          1→3: 0.525143 (gumbel_sample)
+          2→3: 0.537268 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.105058
+        FR-SIC: 1 - (1-0.529137) * 0.105058 = 0.950532
+
+      Sample 1:
+        Self-activation: 0.529137
+        Neighbor influences:
+          0→3: 0.522291 (gumbel_sample)
+          1→3: 0.524877 (gumbel_sample)
+          2→3: 0.537268 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.105027
+        FR-SIC: 1 - (1-0.529137) * 0.105027 = 0.950547
+
+      Sample 2:
+        Self-activation: 0.529137
+        Neighbor influences:
+          0→3: 0.527279 (gumbel_sample)
+          1→3: 0.526963 (gumbel_sample)
+          2→3: 0.537268 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.103474
+        FR-SIC: 1 - (1-0.529137) * 0.103474 = 0.951278
+
+  Node 4:
+    Average final probability: 0.950468
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.529137
+        Neighbor influences:
+          0→4: 0.524569 (gumbel_sample)
+          1→4: 0.525424 (gumbel_sample)
+          2→4: 0.533260 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.105310
+        FR-SIC: 1 - (1-0.529137) * 0.105310 = 0.950414
+
+      Sample 1:
+        Self-activation: 0.529137
+        Neighbor influences:
+          0→4: 0.525353 (gumbel_sample)
+          1→4: 0.522756 (gumbel_sample)
+          2→4: 0.536510 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.104991
+        FR-SIC: 1 - (1-0.529137) * 0.104991 = 0.950564
+
+      Sample 2:
+        Self-activation: 0.529137
+        Neighbor influences:
+          0→4: 0.527099 (gumbel_sample)
+          1→4: 0.527055 (gumbel_sample)
+          2→4: 0.529273 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.105281
+        FR-SIC: 1 - (1-0.529137) * 0.105281 = 0.950427
+
+
+
+TIMESTEP 4:
+----------------------------------------
+Gumbel Samples (3):
+  Sample 0:
+    0_4_0: [0.9052, 0.0457, 0.0491] → type_0
+    1_4_0: [0.9864, 0.0099, 0.0037] → type_0
+    2_4_0: [0.0608, 0.8312, 0.1080] → type_1
+    3_4_0: [0.4546, 0.3847, 0.1606] → type_0
+    0_4_1: [0.7846, 0.1442, 0.0712] → type_0
+    1_4_1: [0.0302, 0.8150, 0.1548] → type_1
+    2_4_1: [0.1534, 0.0143, 0.8323] → type_2
+    3_4_1: [0.4797, 0.2915, 0.2288] → type_0
+    0_4_2: [0.0000, 1.0000, 0.0000] → type_1
+    1_4_2: [0.4657, 0.0709, 0.4634] → type_0
+    2_4_2: [0.9679, 0.0257, 0.0064] → type_0
+    3_4_2: [0.0424, 0.2261, 0.7315] → type_2
+    0_4_3: [0.1832, 0.2371, 0.5797] → type_2
+    1_4_3: [0.3473, 0.0920, 0.5607] → type_2
+    2_4_3: [0.3334, 0.2771, 0.3895] → type_2
+    3_4_3: [0.0963, 0.4262, 0.4775] → type_2
+    0_2_4: [0.6666, 0.2770, 0.0565] → type_0
+    0_3_4: [0.9222, 0.0549, 0.0229] → type_0
+    0_4_4: [0.2632, 0.0411, 0.6958] → type_2
+    1_2_4: [0.0438, 0.0852, 0.8710] → type_2
+    1_3_4: [0.5791, 0.1878, 0.2331] → type_0
+    1_4_4: [0.8368, 0.1413, 0.0218] → type_0
+    2_4_4: [0.0508, 0.1129, 0.8364] → type_2
+    3_4_4: [0.5302, 0.1600, 0.3098] → type_0
+    0_4_5: [0.0808, 0.0577, 0.8615] → type_2
+    1_4_5: [0.6348, 0.0840, 0.2811] → type_0
+    2_4_5: [0.0600, 0.0192, 0.9208] → type_2
+    3_4_5: [0.0762, 0.5525, 0.3713] → type_1
+  Sample 1:
+    0_4_0: [0.2675, 0.7084, 0.0241] → type_1
+    1_4_0: [0.1411, 0.6554, 0.2035] → type_1
+    2_4_0: [0.0312, 0.9002, 0.0687] → type_1
+    3_4_0: [0.6544, 0.2557, 0.0899] → type_0
+    0_4_1: [0.4962, 0.4195, 0.0843] → type_0
+    1_4_1: [0.0947, 0.6989, 0.2064] → type_1
+    2_4_1: [0.2152, 0.0338, 0.7510] → type_2
+    3_4_1: [0.9846, 0.0012, 0.0142] → type_0
+    0_4_2: [0.4771, 0.1340, 0.3889] → type_0
+    1_4_2: [0.3577, 0.3720, 0.2703] → type_1
+    2_4_2: [0.8679, 0.0052, 0.1269] → type_0
+    3_4_2: [0.4860, 0.0179, 0.4961] → type_2
+    0_4_3: [0.0965, 0.2146, 0.6888] → type_2
+    1_4_3: [0.7380, 0.0965, 0.1655] → type_0
+    2_4_3: [0.1009, 0.1143, 0.7847] → type_2
+    3_4_3: [0.0352, 0.8062, 0.1586] → type_1
+    0_2_4: [0.0020, 0.0251, 0.9729] → type_2
+    0_3_4: [0.0000, 0.0062, 0.9938] → type_2
+    0_4_4: [0.0811, 0.0779, 0.8410] → type_2
+    1_2_4: [0.1846, 0.7018, 0.1136] → type_1
+    1_3_4: [0.9188, 0.0007, 0.0805] → type_0
+    1_4_4: [0.0516, 0.9273, 0.0211] → type_1
+    2_4_4: [0.4273, 0.4258, 0.1468] → type_0
+    3_4_4: [0.9154, 0.0430, 0.0416] → type_0
+    0_4_5: [0.8970, 0.0357, 0.0674] → type_0
+    1_4_5: [0.0278, 0.2386, 0.7336] → type_2
+    2_4_5: [0.1495, 0.4483, 0.4022] → type_1
+    3_4_5: [0.8475, 0.0928, 0.0597] → type_0
+  Sample 2:
+    0_4_0: [0.0144, 0.7354, 0.2503] → type_1
+    1_4_0: [0.4199, 0.3028, 0.2772] → type_0
+    2_4_0: [0.0163, 0.3548, 0.6290] → type_2
+    3_4_0: [0.2133, 0.0597, 0.7270] → type_2
+    0_4_1: [0.4100, 0.1397, 0.4503] → type_2
+    1_4_1: [0.0583, 0.4135, 0.5282] → type_2
+    2_4_1: [0.0457, 0.0113, 0.9430] → type_2
+    3_4_1: [0.6556, 0.0567, 0.2876] → type_0
+    0_4_2: [0.0855, 0.5691, 0.3455] → type_1
+    1_4_2: [0.1555, 0.1598, 0.6847] → type_2
+    2_4_2: [0.1724, 0.0665, 0.7611] → type_2
+    3_4_2: [0.2637, 0.6756, 0.0607] → type_1
+    0_4_3: [0.0433, 0.0022, 0.9545] → type_2
+    1_4_3: [0.0823, 0.1985, 0.7192] → type_2
+    2_4_3: [0.7742, 0.1303, 0.0955] → type_0
+    3_4_3: [0.1280, 0.1304, 0.7416] → type_2
+    0_2_4: [0.2799, 0.7123, 0.0079] → type_1
+    0_3_4: [0.7878, 0.0302, 0.1820] → type_0
+    0_4_4: [0.2387, 0.6679, 0.0935] → type_1
+    1_2_4: [0.1986, 0.4491, 0.3523] → type_1
+    1_3_4: [0.0655, 0.0484, 0.8861] → type_2
+    1_4_4: [0.0312, 0.1553, 0.8135] → type_2
+    2_4_4: [0.8034, 0.0050, 0.1916] → type_0
+    3_4_4: [0.0717, 0.8064, 0.1220] → type_1
+    0_4_5: [0.1675, 0.6089, 0.2236] → type_1
+    1_4_5: [0.1752, 0.3552, 0.4696] → type_2
+    2_4_5: [0.7876, 0.0027, 0.2097] → type_0
+    3_4_5: [0.6838, 0.0591, 0.2571] → type_0
+
+Node Computations (inactive nodes only):
+  Node 4:
+    Average final probability: 0.977642
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.526148
+        Neighbor influences:
+          0→4: 0.528995 (gumbel_sample)
+          1→4: 0.526338 (gumbel_sample)
+          2→4: 0.539750 (gumbel_sample)
+          3→4: 0.542855 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.046940
+        FR-SIC: 1 - (1-0.526148) * 0.046940 = 0.977757
+
+      Sample 1:
+        Self-activation: 0.526148
+        Neighbor influences:
+          0→4: 0.530035 (gumbel_sample)
+          1→4: 0.527375 (gumbel_sample)
+          2→4: 0.533231 (gumbel_sample)
+          3→4: 0.541971 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.047487
+        FR-SIC: 1 - (1-0.526148) * 0.047487 = 0.977498
+
+      Sample 2:
+        Self-activation: 0.526148
+        Neighbor influences:
+          0→4: 0.523874 (gumbel_sample)
+          1→4: 0.535256 (gumbel_sample)
+          2→4: 0.534132 (gumbel_sample)
+          3→4: 0.542865 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.047124
+        FR-SIC: 1 - (1-0.526148) * 0.047124 = 0.977670
+
+
+
+============================================================
+EPOCH 2
+============================================================
+
+TIMESTEP 0:
+----------------------------------------
+Gumbel Samples (2):
+  Sample 0:
+    0_2_0: [0.0008, 0.0000, 0.9992] → type_2
+    0_3_0: [0.0012, 0.0000, 0.9987] → type_2
+    0_4_0: [0.9982, 0.0011, 0.0006] → type_0
+    1_2_0: [0.7341, 0.1595, 0.1064] → type_0
+    1_3_0: [0.0067, 0.5436, 0.4497] → type_1
+    1_4_0: [0.0000, 0.0001, 0.9999] → type_2
+    2_4_0: [0.0000, 0.0000, 1.0000] → type_2
+    3_4_0: [0.9999, 0.0000, 0.0001] → type_0
+  Sample 1:
+    0_2_0: [0.0911, 0.0818, 0.8271] → type_2
+    0_3_0: [0.0023, 0.0024, 0.9953] → type_2
+    0_4_0: [0.0097, 0.0465, 0.9438] → type_2
+    1_2_0: [0.9468, 0.0037, 0.0495] → type_0
+    1_3_0: [0.7856, 0.0000, 0.2144] → type_0
+    1_4_0: [0.8496, 0.1504, 0.0000] → type_0
+    2_4_0: [0.3485, 0.0202, 0.6313] → type_2
+    3_4_0: [0.9997, 0.0001, 0.0002] → type_0
+
+Node Computations (inactive nodes only):
+  Node 0:
+    Average final probability: 0.541530
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+      Sample 1:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+  Node 1:
+    Average final probability: 0.541530
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+      Sample 1:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+  Node 2:
+    Average final probability: 0.541530
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+      Sample 1:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+  Node 3:
+    Average final probability: 0.541530
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+      Sample 1:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+  Node 4:
+    Average final probability: 0.541530
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+      Sample 1:
+        Self-activation: 0.541530
+        No active neighbors
+        Final = Self: 0.541530
+
+
+
+TIMESTEP 1:
+----------------------------------------
+Gumbel Samples (2):
+  Sample 0:
+    0_2_1: [0.0000, 0.0003, 0.9997] → type_2
+    0_3_1: [0.0100, 0.0003, 0.9897] → type_2
+    0_4_1: [0.0000, 0.0000, 1.0000] → type_2
+    1_2_1: [0.0189, 0.0001, 0.9810] → type_2
+    1_3_1: [0.9979, 0.0000, 0.0020] → type_0
+    1_4_1: [0.4017, 0.4111, 0.1872] → type_1
+    2_4_1: [0.0177, 0.9296, 0.0527] → type_1
+    3_4_1: [0.0336, 0.1504, 0.8160] → type_2
+  Sample 1:
+    0_2_1: [0.0083, 0.0022, 0.9895] → type_2
+    0_3_1: [0.0110, 0.0177, 0.9713] → type_2
+    0_4_1: [0.7737, 0.0242, 0.2021] → type_0
+    1_2_1: [0.1445, 0.7567, 0.0988] → type_1
+    1_3_1: [0.0051, 0.7291, 0.2658] → type_1
+    1_4_1: [0.1385, 0.0000, 0.8615] → type_2
+    2_4_1: [0.0000, 0.0001, 0.9999] → type_2
+    3_4_1: [0.0000, 0.9999, 0.0001] → type_1
+
+Node Computations (inactive nodes only):
+  Node 1:
+    Average final probability: 0.780230
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.542546
+        Neighbor influences:
+          0→1: 0.519579 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.480421
+        FR-SIC: 1 - (1-0.542546) * 0.480421 = 0.780230
+
+      Sample 1:
+        Self-activation: 0.542546
+        Neighbor influences:
+          0→1: 0.519579 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.480421
+        FR-SIC: 1 - (1-0.542546) * 0.480421 = 0.780230
+
+  Node 2:
+    Average final probability: 0.779196
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.542546
+        Neighbor influences:
+          0→2: 0.517341 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.482659
+        FR-SIC: 1 - (1-0.542546) * 0.482659 = 0.779206
+
+      Sample 1:
+        Self-activation: 0.542546
+        Neighbor influences:
+          0→2: 0.517298 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.482702
+        FR-SIC: 1 - (1-0.542546) * 0.482702 = 0.779186
+
+  Node 3:
+    Average final probability: 0.778635
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.542546
+        Neighbor influences:
+          0→3: 0.516156 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.483844
+        FR-SIC: 1 - (1-0.542546) * 0.483844 = 0.778664
+
+      Sample 1:
+        Self-activation: 0.542546
+        Neighbor influences:
+          0→3: 0.516030 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.483970
+        FR-SIC: 1 - (1-0.542546) * 0.483970 = 0.778606
+
+  Node 4:
+    Average final probability: 0.776120
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.542546
+        Neighbor influences:
+          0→4: 0.513640 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.486360
+        FR-SIC: 1 - (1-0.542546) * 0.486360 = 0.777513
+
+      Sample 1:
+        Self-activation: 0.542546
+        Neighbor influences:
+          0→4: 0.507551 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.492449
+        FR-SIC: 1 - (1-0.542546) * 0.492449 = 0.774728
+
+
+
+TIMESTEP 2:
+----------------------------------------
+Gumbel Samples (2):
+  Sample 0:
+    0_2_0: [0.0008, 0.0000, 0.9992] → type_2
+    1_2_0: [0.7341, 0.1595, 0.1064] → type_0
+    0_2_1: [0.0000, 0.0003, 0.9997] → type_2
+    1_2_1: [0.0189, 0.0001, 0.9810] → type_2
+    0_2_2: [0.0000, 0.0000, 1.0000] → type_2
+    0_3_2: [0.0000, 0.0006, 0.9994] → type_2
+    0_4_2: [0.9459, 0.0000, 0.0541] → type_0
+    1_2_2: [0.5695, 0.0771, 0.3534] → type_0
+    1_3_2: [0.0362, 0.9624, 0.0014] → type_1
+    1_4_2: [0.6751, 0.0157, 0.3091] → type_0
+    2_4_2: [0.0003, 0.0000, 0.9997] → type_2
+    3_4_2: [0.0001, 0.0000, 0.9999] → type_2
+    0_2_3: [0.0439, 0.9360, 0.0202] → type_1
+    1_2_3: [0.0020, 0.0279, 0.9700] → type_2
+    0_2_4: [0.0049, 0.9927, 0.0025] → type_1
+    1_2_4: [0.0039, 0.7834, 0.2127] → type_1
+    0_2_5: [0.9937, 0.0050, 0.0013] → type_0
+    1_2_5: [0.0000, 0.0001, 0.9999] → type_2
+  Sample 1:
+    0_2_0: [0.0911, 0.0818, 0.8271] → type_2
+    1_2_0: [0.9468, 0.0037, 0.0495] → type_0
+    0_2_1: [0.0083, 0.0022, 0.9895] → type_2
+    1_2_1: [0.1445, 0.7567, 0.0988] → type_1
+    0_2_2: [0.1483, 0.4604, 0.3913] → type_1
+    0_3_2: [0.0393, 0.1673, 0.7934] → type_2
+    0_4_2: [0.8228, 0.1598, 0.0174] → type_0
+    1_2_2: [0.0568, 0.5238, 0.4195] → type_1
+    1_3_2: [0.0048, 0.9949, 0.0003] → type_1
+    1_4_2: [0.4176, 0.1553, 0.4271] → type_2
+    2_4_2: [0.0064, 0.0013, 0.9922] → type_2
+    3_4_2: [0.0000, 1.0000, 0.0000] → type_1
+    0_2_3: [0.0187, 0.9662, 0.0151] → type_1
+    1_2_3: [0.0002, 0.0000, 0.9998] → type_2
+    0_2_4: [0.0066, 0.0025, 0.9909] → type_2
+    1_2_4: [0.4930, 0.3364, 0.1705] → type_0
+    0_2_5: [1.0000, 0.0000, 0.0000] → type_0
+    1_2_5: [0.0139, 0.9444, 0.0416] → type_1
+
+Node Computations (inactive nodes only):
+  Node 2:
+    Average final probability: 0.894302
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.534498
+        Neighbor influences:
+          0→2: 0.522250 (gumbel_sample)
+          1→2: 0.525631 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.226630
+        FR-SIC: 1 - (1-0.534498) * 0.226630 = 0.894503
+
+      Sample 1:
+        Self-activation: 0.534498
+        Neighbor influences:
+          0→2: 0.519820 (gumbel_sample)
+          1→2: 0.526228 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.227496
+        FR-SIC: 1 - (1-0.534498) * 0.227496 = 0.894100
+
+  Node 3:
+    Average final probability: 0.892832
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.534498
+        Neighbor influences:
+          0→3: 0.520097 (gumbel_sample)
+          1→3: 0.520985 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.229881
+        FR-SIC: 1 - (1-0.534498) * 0.229881 = 0.892990
+
+      Sample 1:
+        Self-activation: 0.534498
+        Neighbor influences:
+          0→3: 0.518626 (gumbel_sample)
+          1→3: 0.521042 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.230558
+        FR-SIC: 1 - (1-0.534498) * 0.230558 = 0.892675
+
+  Node 4:
+    Average final probability: 0.890176
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.534498
+        Neighbor influences:
+          0→4: 0.510132 (gumbel_sample)
+          1→4: 0.517910 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.236161
+        FR-SIC: 1 - (1-0.534498) * 0.236161 = 0.890067
+
+      Sample 1:
+        Self-activation: 0.534498
+        Neighbor influences:
+          0→4: 0.510034 (gumbel_sample)
+          1→4: 0.518962 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.235692
+        FR-SIC: 1 - (1-0.534498) * 0.235692 = 0.890285
+
+
+
+TIMESTEP 3:
+----------------------------------------
+Gumbel Samples (2):
+  Sample 0:
+    0_3_0: [0.0012, 0.0000, 0.9987] → type_2
+    1_3_0: [0.0067, 0.5436, 0.4497] → type_1
+    0_3_1: [0.0100, 0.0003, 0.9897] → type_2
+    1_3_1: [0.9979, 0.0000, 0.0020] → type_0
+    0_3_2: [0.0000, 0.0006, 0.9994] → type_2
+    1_3_2: [0.0362, 0.9624, 0.0014] → type_1
+    0_2_3: [0.0439, 0.9360, 0.0202] → type_1
+    0_3_3: [0.0390, 0.0564, 0.9046] → type_2
+    0_4_3: [0.0326, 0.0001, 0.9673] → type_2
+    1_2_3: [0.0020, 0.0279, 0.9700] → type_2
+    1_3_3: [0.0001, 0.9958, 0.0041] → type_1
+    1_4_3: [0.0241, 0.0000, 0.9759] → type_2
+    2_4_3: [0.0000, 0.0000, 1.0000] → type_2
+    3_4_3: [0.5704, 0.0322, 0.3973] → type_0
+    0_3_4: [0.8433, 0.0010, 0.1557] → type_0
+    1_3_4: [0.0000, 0.0000, 0.9999] → type_2
+    0_3_5: [0.0001, 0.0000, 0.9999] → type_2
+    1_3_5: [0.1739, 0.8165, 0.0096] → type_1
+  Sample 1:
+    0_3_0: [0.0023, 0.0024, 0.9953] → type_2
+    1_3_0: [0.7856, 0.0000, 0.2144] → type_0
+    0_3_1: [0.0110, 0.0177, 0.9713] → type_2
+    1_3_1: [0.0051, 0.7291, 0.2658] → type_1
+    0_3_2: [0.0393, 0.1673, 0.7934] → type_2
+    1_3_2: [0.0048, 0.9949, 0.0003] → type_1
+    0_2_3: [0.0187, 0.9662, 0.0151] → type_1
+    0_3_3: [0.0030, 0.0432, 0.9538] → type_2
+    0_4_3: [0.0502, 0.0050, 0.9448] → type_2
+    1_2_3: [0.0002, 0.0000, 0.9998] → type_2
+    1_3_3: [0.2628, 0.6283, 0.1090] → type_1
+    1_4_3: [0.0001, 0.8759, 0.1240] → type_1
+    2_4_3: [0.9884, 0.0111, 0.0005] → type_0
+    3_4_3: [0.4006, 0.0000, 0.5994] → type_2
+    0_3_4: [0.0001, 0.0037, 0.9962] → type_2
+    1_3_4: [0.3279, 0.0298, 0.6423] → type_2
+    0_3_5: [0.9165, 0.0835, 0.0000] → type_0
+    1_3_5: [0.1058, 0.0169, 0.8773] → type_2
+
+Node Computations (inactive nodes only):
+  Node 3:
+    Average final probability: 0.950436
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.528110
+        Neighbor influences:
+          0→3: 0.525709 (gumbel_sample)
+          1→3: 0.521927 (gumbel_sample)
+          2→3: 0.536333 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.105134
+        FR-SIC: 1 - (1-0.528110) * 0.105134 = 0.950388
+
+      Sample 1:
+        Self-activation: 0.528110
+        Neighbor influences:
+          0→3: 0.526128 (gumbel_sample)
+          1→3: 0.522430 (gumbel_sample)
+          2→3: 0.536333 (observed_type_2)
+        Product ∏(1-p_neighbor): 0.104931
+        FR-SIC: 1 - (1-0.528110) * 0.104931 = 0.950484
+
+  Node 4:
+    Average final probability: 0.949767
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.528110
+        Neighbor influences:
+          0→4: 0.524037 (gumbel_sample)
+          1→4: 0.526239 (gumbel_sample)
+          2→4: 0.536422 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.104534
+        FR-SIC: 1 - (1-0.528110) * 0.104534 = 0.950672
+
+      Sample 1:
+        Self-activation: 0.528110
+        Neighbor influences:
+          0→4: 0.523872 (gumbel_sample)
+          1→4: 0.520328 (gumbel_sample)
+          2→4: 0.525509 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.108367
+        FR-SIC: 1 - (1-0.528110) * 0.108367 = 0.948863
+
+
+
+TIMESTEP 4:
+----------------------------------------
+Gumbel Samples (2):
+  Sample 0:
+    0_4_0: [0.9982, 0.0011, 0.0006] → type_0
+    1_4_0: [0.0000, 0.0001, 0.9999] → type_2
+    2_4_0: [0.0000, 0.0000, 1.0000] → type_2
+    3_4_0: [0.9999, 0.0000, 0.0001] → type_0
+    0_4_1: [0.0000, 0.0000, 1.0000] → type_2
+    1_4_1: [0.4017, 0.4111, 0.1872] → type_1
+    2_4_1: [0.0177, 0.9296, 0.0527] → type_1
+    3_4_1: [0.0336, 0.1504, 0.8160] → type_2
+    0_4_2: [0.9459, 0.0000, 0.0541] → type_0
+    1_4_2: [0.6751, 0.0157, 0.3091] → type_0
+    2_4_2: [0.0003, 0.0000, 0.9997] → type_2
+    3_4_2: [0.0001, 0.0000, 0.9999] → type_2
+    0_4_3: [0.0326, 0.0001, 0.9673] → type_2
+    1_4_3: [0.0241, 0.0000, 0.9759] → type_2
+    2_4_3: [0.0000, 0.0000, 1.0000] → type_2
+    3_4_3: [0.5704, 0.0322, 0.3973] → type_0
+    0_2_4: [0.0049, 0.9927, 0.0025] → type_1
+    0_3_4: [0.8433, 0.0010, 0.1557] → type_0
+    0_4_4: [0.0034, 0.3562, 0.6404] → type_2
+    1_2_4: [0.0039, 0.7834, 0.2127] → type_1
+    1_3_4: [0.0000, 0.0000, 0.9999] → type_2
+    1_4_4: [0.9825, 0.0156, 0.0019] → type_0
+    2_4_4: [0.0000, 0.0001, 0.9999] → type_2
+    3_4_4: [0.9754, 0.0030, 0.0216] → type_0
+    0_4_5: [0.9965, 0.0034, 0.0001] → type_0
+    1_4_5: [0.0000, 0.9993, 0.0007] → type_1
+    2_4_5: [0.1381, 0.0000, 0.8619] → type_2
+    3_4_5: [0.0001, 0.9998, 0.0000] → type_1
+  Sample 1:
+    0_4_0: [0.0097, 0.0465, 0.9438] → type_2
+    1_4_0: [0.8496, 0.1504, 0.0000] → type_0
+    2_4_0: [0.3485, 0.0202, 0.6313] → type_2
+    3_4_0: [0.9997, 0.0001, 0.0002] → type_0
+    0_4_1: [0.7737, 0.0242, 0.2021] → type_0
+    1_4_1: [0.1385, 0.0000, 0.8615] → type_2
+    2_4_1: [0.0000, 0.0001, 0.9999] → type_2
+    3_4_1: [0.0000, 0.9999, 0.0001] → type_1
+    0_4_2: [0.8228, 0.1598, 0.0174] → type_0
+    1_4_2: [0.4176, 0.1553, 0.4271] → type_2
+    2_4_2: [0.0064, 0.0013, 0.9922] → type_2
+    3_4_2: [0.0000, 1.0000, 0.0000] → type_1
+    0_4_3: [0.0502, 0.0050, 0.9448] → type_2
+    1_4_3: [0.0001, 0.8759, 0.1240] → type_1
+    2_4_3: [0.9884, 0.0111, 0.0005] → type_0
+    3_4_3: [0.4006, 0.0000, 0.5994] → type_2
+    0_2_4: [0.0066, 0.0025, 0.9909] → type_2
+    0_3_4: [0.0001, 0.0037, 0.9962] → type_2
+    0_4_4: [0.0000, 1.0000, 0.0000] → type_1
+    1_2_4: [0.4930, 0.3364, 0.1705] → type_0
+    1_3_4: [0.3279, 0.0298, 0.6423] → type_2
+    1_4_4: [0.0070, 0.0096, 0.9834] → type_2
+    2_4_4: [0.0003, 0.6326, 0.3671] → type_1
+    3_4_4: [0.0239, 0.9747, 0.0013] → type_1
+    0_4_5: [0.0052, 0.5818, 0.4130] → type_1
+    1_4_5: [0.9885, 0.0109, 0.0006] → type_0
+    2_4_5: [0.1376, 0.8612, 0.0012] → type_1
+    3_4_5: [0.0365, 0.0001, 0.9634] → type_2
+
+Node Computations (inactive nodes only):
+  Node 4:
+    Average final probability: 0.977294
+    Details by sample:
+      Sample 0:
+        Self-activation: 0.525180
+        Neighbor influences:
+          0→4: 0.525415 (gumbel_sample)
+          1→4: 0.523596 (gumbel_sample)
+          2→4: 0.539683 (gumbel_sample)
+          3→4: 0.540919 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.047779
+        FR-SIC: 1 - (1-0.525180) * 0.047779 = 0.977314
+
+      Sample 1:
+        Self-activation: 0.525180
+        Neighbor influences:
+          0→4: 0.519943 (gumbel_sample)
+          1→4: 0.534417 (gumbel_sample)
+          2→4: 0.533452 (gumbel_sample)
+          3→4: 0.540997 (gumbel_sample)
+        Product ∏(1-p_neighbor): 0.047863
+        FR-SIC: 1 - (1-0.525180) * 0.047863 = 0.977274
+
+

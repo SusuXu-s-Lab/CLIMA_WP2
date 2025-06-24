@@ -1,0 +1,6 @@
+household_id,income,property_value,insurance_coverage,household_size,age_head,education_level,years_in_community,damage_severity
+1,50000.0,200000.0,1,3,40.0,2,5.0,0.5
+2,50000.0,200000.0,1,3,40.0,2,5.0,0.5
+3,50000.0,200000.0,1,3,40.0,2,5.0,0.5
+4,50000.0,200000.0,1,3,40.0,2,5.0,0.5
+5,50000.0,200000.0,1,3,40.0,2,5.0,0.5
