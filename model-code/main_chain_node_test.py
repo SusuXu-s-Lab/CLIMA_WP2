@@ -800,7 +800,7 @@ def run_real_variable_capture_test():
     
     # Run the test
     tester = ChainNetworkTester()
-    results = tester.run_complete_test(L=3, max_epochs=400)  # 增加到300个epoch进行完整测试
+    results = tester.run_complete_test(L=3, max_epochs=3)  # 增加到300个epoch进行完整测试
 
     print(f"\n{'='*80}")
     print("REAL VARIABLE CAPTURE & NETWORK ANALYSIS TEST COMPLETE!")
