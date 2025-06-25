@@ -38,9 +38,12 @@ class NetworkEvolution(nn.Module):
         
         if len(demo_dists) > 0:
             # Update buffers with tensor values
-            self.sigma_demo_sq.data = torch.median(torch.stack(demo_dists)) ** 2
-            self.sigma_geo_sq.data = torch.median(torch.stack(geo_dists)) ** 2
-        
+            demo_median = torch.median(torch.stack(demo_dists)) ** 2
+            geo_median = torch.median(torch.stack(geo_dists)) ** 2
+
+            self.sigma_demo_sq.data = max(demo_median ** 2, torch.tensor(1e-6))
+            self.sigma_geo_sq.data = max(geo_median ** 2, torch.tensor(1e-6))
+
         print(f"Normalization: σ_demo² = {self.sigma_demo_sq.item():.4f}, σ_geo² = {self.sigma_geo_sq.item():.4f}")
 
     def similarity(self, features_i, features_j, distances):
