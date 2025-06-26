@@ -216,7 +216,11 @@ def update_link_matrix_one_step(similarity_df: pd.DataFrame,
 
             # 1)  from NO-LINK  (Eq. 13-14) ---------------------------------
             if prev == 0:
-                probs = [1.0-inter_mat[i, j], inter_mat[i, j]]
+                both_stay = (vac_t[i] == 0) and (vac_t[j] == 0)
+                if both_stay:
+                    probs = [1.0-inter_mat[i, j], inter_mat[i, j]]
+                else:
+                    probs = [1, 0]
                 new = rng.choice([0, 2], p=probs)
 
             # 2)  from BONDING  (Eq. 15)  – stays bonding
