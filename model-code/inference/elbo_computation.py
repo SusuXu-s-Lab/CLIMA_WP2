@@ -14,17 +14,17 @@ class ELBOComputation:
     4. State likelihood uses marginal-based sampling (conceptually same)
     5. ALL TERMS NOW NORMALIZED BY GLOBAL PROBLEM SIZE
     """
-    
+
     def __init__(self, network_evolution: NetworkEvolution, state_transition: StateTransition,
-                 sparsity_weight: float = 0.0):
+                 rho_1: float = 0.5, rho_2: float = 0.5, confidence_weight: float = 0.0):
         self.network_evolution = network_evolution
         self.state_transition = state_transition
-        self.sparsity_weight = sparsity_weight
+        self.confidence_weight = confidence_weight
         
         # Observation model parameters
-        self.rho_1 = torch.nn.Parameter(torch.tensor(0.3))
-        self.rho_2 = torch.nn.Parameter(torch.tensor(0.4))
-    
+        self.rho_1 = torch.nn.Parameter(torch.tensor(rho_1))  # Probability of observing link type 1
+        self.rho_2 = torch.nn.Parameter(torch.tensor(rho_2))  # Probability of observing link type 2
+
     def compute_state_likelihood_batch(self,
                                      features: torch.Tensor,
                                      states: torch.Tensor,
@@ -45,11 +45,11 @@ class ELBOComputation:
             if n_positive == 0:
                 return 1.0, 1.0  
             
-            pos_weight = min((n_total - n_positive) / n_positive, 10.0)
+            pos_weight = min(5*(n_total - n_positive) / n_positive, 100.0)
             return pos_weight, 1.0
 
         total_likelihood = 0.0
-        num_samples = len(gumbel_samples[0])
+        num_samples = len(gumbel_samples)
         # print(f"Number of Gumbel samples: {num_samples}")
         
         for sample_idx, current_samples in enumerate(gumbel_samples):
@@ -95,7 +95,7 @@ class ELBOComputation:
             
             total_likelihood += sample_likelihood
         
-        return total_likelihood
+        return total_likelihood/num_samples
     
 
     def compute_network_observation_likelihood_batch(self,
@@ -371,12 +371,12 @@ class ELBOComputation:
         # We'll add it to the method signature in the main compute_elbo_batch method
         return total_entropy  # Will be normalized in the caller
     
-    def compute_sparsity_regularization(self, marginal_probs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def compute_confidence_regularization(self, marginal_probs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
-        Network sparsity regularization using marginal probabilities.
+        Network confidence regularization using marginal probabilities.
         NOW WITH NORMALIZATION: Divided by total possible link-timesteps.
         """
-        if self.sparsity_weight == 0.0:
+        if self.confidence_weight == 0.0:
             return torch.tensor(0.0)
         
         total_entropy = 0.0
@@ -463,7 +463,7 @@ class ELBOComputation:
     
 
     # def compute_connection_density_bonus(self, marginal_probs: Dict[str, torch.Tensor]) -> torch.Tensor:
-    #     """Reward network connectivity to counteract sparsity bias"""
+    #     """Reward network connectivity to counteract confidence bias"""
     #     if len(marginal_probs) == 0:
     #         return torch.tensor(0.0)
         
@@ -484,26 +484,227 @@ class ELBOComputation:
         
     #     return torch.tensor(0.0)
 
-    def compute_connection_density_bonus(self, marginal_probs, target_density=0.35):
-        """Target-based density bonus instead of always rewarding connections"""
+    # def compute_connection_density_bonus(self, marginal_probs, target_density=0.35):
+    #     """Target-based density bonus instead of always rewarding connections"""
         
-        connection_probs = []
-        for pair_key, π_ij in marginal_probs.items():
-            connection_prob = π_ij[1] + π_ij[2]
-            connection_probs.append(connection_prob)
+    #     connection_probs = []
+    #     for pair_key, π_ij in marginal_probs.items():
+    #         connection_prob = π_ij[1] + π_ij[2]
+    #         connection_probs.append(connection_prob)
         
-        if len(connection_probs) > 0:
-            current_density = torch.mean(torch.stack(connection_probs))
+    #     if len(connection_probs) > 0:
+    #         current_density = torch.mean(torch.stack(connection_probs))
             
-            # If current density is below target, reward based on log difference
-            if current_density < target_density:
-                bonus = torch.log(current_density / target_density + 1e-8)  
-            else:
-                bonus = - (current_density - target_density) ** 2      
+    #         # If current density is below target, reward based on log difference
+    #         if current_density < target_density:
+    #             bonus = torch.log(current_density / target_density + 1e-8)  
+    #         else:
+    #             bonus = - (current_density - target_density) ** 2      
             
-            return bonus
+    #         return bonus
         
-        return torch.tensor(0.0)
+    #     return torch.tensor(0.0)
+    
+    def compute_information_propagation_penalty(self, marginal_probs, network_data, max_timestep):
+        total_penalty = 0.0
+        bonding_pairs_processed = set()
+        
+        for t in range(max_timestep + 1):
+            observed_edges = network_data.get_observed_edges_at_time(t)
+            
+            for i, j, observed_type in observed_edges:
+                if observed_type == 1:  # bonding: avoid double counting
+                    if (i, j) in bonding_pairs_processed:
+                        continue
+                    bonding_pairs_processed.add((i, j))
+                    
+                    for t_other in range(max_timestep + 1):
+                        pair_key = f"{i}_{j}_{t_other}"
+                        if pair_key in marginal_probs:
+                            total_penalty -= 100*torch.log(marginal_probs[pair_key][1] + 1e-8)
+                
+                elif observed_type == 2:  # bridging: allow multiple penalties
+                    for delta in [-2, -1, 1, 2]:
+                        t_neighbor = t + delta
+                        if 0 <= t_neighbor <= max_timestep:
+                            pair_key = f"{i}_{j}_{t_neighbor}"
+                            if pair_key in marginal_probs:
+                                weight = 1.0 / (abs(delta) + 1)
+                                total_penalty -= weight * torch.log(marginal_probs[pair_key][2] + 1e-8)
+        
+        return total_penalty
+    
+
+
+    def compute_type_specific_density_penalty(self, marginal_probs, network_data, max_timestep,
+                                            temperature=0.01, balance_factor=1.0, penalty_strength=1.0):
+            """
+            Key advantages:
+            1. Handles vastly different scales (12 vs 3800)
+            2. Provides meaningful gradients regardless of magnitude
+            3. Weights types by their relative importance
+            4. Symmetric treatment of over/under-estimation
+            """
+            total_penalty = 0.0
+            
+            # Global statistics for final print
+            total_expected_bonding = 0.0
+            total_expected_bridging = 0.0
+            total_discrete_bonding = 0.0
+            total_discrete_bridging = 0.0
+            
+            for t in range(max_timestep + 1):
+                # Count observed edges at timestep t
+                observed_bonding_t = 0
+                observed_bridging_t = 0
+                
+                observed_edges = network_data.get_observed_edges_at_time(t)
+                for i, j, link_type in observed_edges:
+                    if link_type == 1:
+                        observed_bonding_t += 1
+                    elif link_type == 2:
+                        observed_bridging_t += 1
+                
+                # Estimate expected hidden edge counts
+                expected_total_bonding_t = observed_bonding_t / (1 - self.rho_1) if self.rho_1 < 1 else observed_bonding_t
+                expected_total_bridging_t = observed_bridging_t / (1 - self.rho_2) if self.rho_2 < 1 else observed_bridging_t
+                
+                expected_hidden_bonding_t = max(expected_total_bonding_t - observed_bonding_t, 0.0)
+                expected_hidden_bridging_t = max(expected_total_bridging_t - observed_bridging_t, 0.0)
+                
+                # Count model predicted hidden edges
+                discrete_bonding_t = 0.0
+                discrete_bridging_t = 0.0
+                
+                # Only process marginal probabilities for current timestep
+                for pair_key, π_ij in marginal_probs.items():
+                    parts = pair_key.split('_')
+                    if len(parts) != 3:
+                        continue
+                    
+                    pair_t = int(parts[2])
+                    if pair_t != t:
+                        continue
+                    
+                    # Use sharp softmax for discrete counting
+                    logits = torch.log(π_ij + 1e-8)
+                    sharp_probs = F.softmax(logits / temperature, dim=0)
+                    
+                    discrete_bonding_t += sharp_probs[1]
+                    discrete_bridging_t += sharp_probs[2]
+                
+                # Compute penalty for timestep t (using your scaling logic)
+                if expected_hidden_bonding_t > 0.1:
+                    bonding_relative_error = torch.abs(discrete_bonding_t - expected_hidden_bonding_t) / expected_hidden_bonding_t
+                    bonding_penalty_t = balance_factor * bonding_relative_error
+                    
+                    # Apply your scaling: limit range and normalize to preserve gradients
+                    max_bonding_penalty = 20.0
+                    bonding_penalty_t = 3 * torch.clamp(bonding_penalty_t, 0.0, max_bonding_penalty) / 20
+                else:
+                    bonding_penalty_t = torch.tensor(0.0)
+                
+                if expected_hidden_bridging_t > 0.1:
+                    bridging_ratio = (discrete_bridging_t + 1) / (expected_hidden_bridging_t + 1)
+                    bridging_penalty_t = torch.abs(torch.log(bridging_ratio))
+                    
+                    # Apply your scaling: keep same range as bonding
+                    max_bridging_penalty = 3.0
+                    bridging_penalty_t = torch.clamp(bridging_penalty_t, 0.0, max_bridging_penalty)
+                else:
+                    bridging_penalty_t = torch.tensor(0.0)
+                
+                # Combine penalties for current timestep
+                timestep_penalty = 0.5 * bonding_penalty_t + 0.5 * bridging_penalty_t
+                total_penalty += timestep_penalty
+                
+                # Accumulate global statistics
+                total_expected_bonding += expected_hidden_bonding_t
+                total_expected_bridging += expected_hidden_bridging_t
+                total_discrete_bonding += discrete_bonding_t.item() if isinstance(discrete_bonding_t, torch.Tensor) else discrete_bonding_t
+                total_discrete_bridging += discrete_bridging_t.item() if isinstance(discrete_bridging_t, torch.Tensor) else discrete_bridging_t
+            
+            # Average across timesteps
+            averaged_penalty = total_penalty / (max_timestep + 1)
+            final_penalty = penalty_strength * averaged_penalty
+            
+            # Print in your original format
+            print(f"Timestep-Specific Density Penalty (T={temperature}, balance={balance_factor}):")
+            print(f"  Expected: bonding={total_expected_bonding:.1f}, bridging={total_expected_bridging:.1f}")
+            print(f"  Discrete: bonding={total_discrete_bonding:.1f}, bridging={total_discrete_bridging:.1f}")
+            print(f"  Final penalty: {final_penalty:.3f}")
+            
+            return final_penalty
+
+    
+    # def compute_type_specific_density_penalty(self, marginal_probs, network_data, max_timestep,
+    #                                           temperature=0.01, balance_factor=1.0, penalty_strength=1.0):
+    #     """
+    #     RECOMMENDED: Normalized log penalty with per-type weighting
+        
+    #     Key advantages for your case:
+    #     1. Handles vastly different scales (12 vs 3800)
+    #     2. Provides meaningful gradients regardless of magnitude
+    #     3. Weights types by their relative importance
+    #     4. Symmetric treatment of over/under-estimation
+    #     """
+    #     # Count observed edges
+    #     observed_bonding = 0
+    #     observed_bridging = 0
+        
+    #     for t in range(max_timestep + 1):
+    #         for i, j, link_type in network_data.get_observed_edges_at_time(t):
+    #             if link_type == 1:
+    #                 observed_bonding += 1
+    #             elif link_type == 2:
+    #                 observed_bridging += 1
+        
+    #     # Estimate expected counts
+    #     expected_hidden_bonding = max((observed_bonding / (1 - self.rho_1)) - observed_bonding, 1.0)
+    #     expected_hidden_bridging = max((observed_bridging / (1 - self.rho_2)) - observed_bridging, 1.0)
+    #     print(f"expected_hidden_bonding: {expected_hidden_bonding}, expected_hidden_bridging: {expected_hidden_bridging}")
+        
+    #     # Gumbel-Softmax discrete counting
+    #     discrete_bonding = 0.0
+    #     discrete_bridging = 0.0
+        
+    #     for pair_key, π_ij in marginal_probs.items():
+    #         logits = torch.log(π_ij + 1e-8)
+    #         sharp_probs = F.softmax(logits / temperature, dim=0)
+            
+    #         discrete_bonding += sharp_probs[1]
+    #         discrete_bridging += sharp_probs[2]
+        
+    #     # Scale-aware penalty computation
+    #     # For bonding (rare): use relative error with high sensitivity
+    #     bonding_relative_error = torch.abs(discrete_bonding - expected_hidden_bonding) / (expected_hidden_bonding if expected_hidden_bonding > 0 else 1.0)
+    #     bonding_penalty = balance_factor * bonding_relative_error  # Higher weight for rare type
+        
+    #     # For bridging (common): use log ratio to handle large numbers
+    #     bridging_ratio = (discrete_bridging + 1) / (expected_hidden_bridging + 1)
+    #     bridging_penalty = torch.abs(torch.log(bridging_ratio))
+        
+    #     # Combine with controlled weighting
+    #     max_bonding_penalty = 20.0
+    #     max_bridging_penalty = 3.0
+    #     bonding_penalty = 3*torch.clamp(bonding_penalty, 0.0, max_bonding_penalty)/20
+    #     bridging_penalty = torch.clamp(bridging_penalty, 0.0, max_bridging_penalty)
+        
+    #     # Equal weighting (since we already balanced via different penalty types)
+    #     combined_penalty = 0.5 * bonding_penalty + 0.5 * bridging_penalty
+        
+    #     # Scale by strength parameter
+    #     final_penalty = penalty_strength * combined_penalty
+        
+    #     print(f"Gumbel Density Penalty (T={temperature}, balance={balance_factor}):")
+    #     print(f"  Expected: bonding={expected_hidden_bonding:.1f}, bridging={expected_hidden_bridging:.1f}")
+    #     print(f"  Discrete: bonding={discrete_bonding:.1f}, bridging={discrete_bridging:.1f}")
+    #     print(f"  Bonding penalty (relative): {bonding_penalty:.3f}")
+    #     print(f"  Bridging penalty (log-ratio): {bridging_penalty:.3f}")
+    #     print(f"  Final penalty: {final_penalty:.3f}")
+        
+    #     return final_penalty
+
     
     def compute_elbo_batch(self,
                         features: torch.Tensor,
@@ -525,55 +726,74 @@ class ELBOComputation:
         #     if epoch < 30:  
         #         return {
         #             'state': 1.0, 'observation': 1.0, 'prior': 0.001,          
-        #             'entropy': 1.0, 'sparsity': 0, 'constraint': -lambda_constraint, 'density_bonus': 1.0
+        #             'entropy': 1.0, 'confidence': 0, 'constraint': -lambda_constraint, 'density_bonus': 1.0
         #         }
         #     elif epoch < 100:  # 50-100 epoch: introduce prior gradually
         #         progress = (epoch - 30) / 70  # 0 to 1
         #         prior_weight = 0.001 + 0.099 * progress
         #         return {
         #             'state': 1.0, 'observation': 1.0, 'prior': prior_weight ,
-        #             'entropy': 1.0 - 0.3 * progress, 'sparsity': 0, 'constraint': -lambda_constraint, 'density_bonus': 1.0
+        #             'entropy': 1.0 - 0.3 * progress, 'confidence': 0, 'constraint': -lambda_constraint, 'density_bonus': 1.0
         #         }
         #     else:  # 100 epoch: full weight
         #         return {
         #             'state': 1.0, 'observation': 1.0, 'prior': 0.1,
-        #             'entropy': 0.7, 'sparsity': 0, 'constraint': -lambda_constraint, 'density_bonus': 1.0
+        #             'entropy': 0.7, 'confidence': 0, 'constraint': -lambda_constraint, 'density_bonus': 1.0
         #         }
 
         def get_dynamic_weights(epoch):
             if epoch < 100:  
                 return {
-                    'state': 1.0, 
+                    'state': 0.0, 
                     'observation': 1.0, 
-                    'prior': 0.1,                          # 提高prior权重
+                    'prior': 0.1,                          
                     'entropy': 1.0, 
-                    'sparsity': 0, 
+                    'confidence': 0.5, 
                     'constraint': -lambda_constraint, 
-                    'density_bonus': 2.0                    # 降低density bonus
+                    'density_bonus': 2.0,                    
+                    'density_penalty': 0.5,
+                    'info_propagation': 1e-4    ##############upupup!!!!!!!!!!
                 }
             elif epoch < 200:
                 progress = (epoch - 100) / 100
-                prior_weight = 0.1 + 0.1 * progress      # 从0.1到0.2
-                # density_weight = 2.0 * (1 - 0.5 * progress) # 从0.5降到0.25
+                state_weight = 0.1    
+                prior_weight = 0.1 + 0.1 * progress      
+                # density_weight = 2.0 * (1 - 0.5 * progress) 
                 density_weight = 2.0
                 return {
-                    'state': 1.0, 
+                    'state': state_weight, 
                     'observation': 1.0, 
                     'prior': prior_weight,
                     'entropy': 1.0 - 0.3 * progress, 
-                    'sparsity': 0, 
+                    'confidence': 0.5, 
                     'constraint': -lambda_constraint, 
-                    'density_bonus': density_weight
+                    'density_bonus': density_weight,
+                    'density_penalty': 0.5,
+                    'info_propagation': 1e-4      
                 }
-            else:
+            elif epoch < 300:
                 return {
-                    'state': 1.0, 
+                    'state': 0.1, 
                     'observation': 1.0, 
                     'prior': 0.2,
                     'entropy': 0.7, 
-                    'sparsity': 0, 
+                    'confidence': 0.5, 
                     'constraint': -lambda_constraint, 
-                    'density_bonus': 2.0                   # 最终很小的bonus
+                    'density_bonus': 2.0,          
+                    'density_penalty': 0.5,
+                    'info_propagation': 1e-4
+                }
+            else:  
+                return {
+                    'state': 1.0, 
+                    'observation': 0.0, 
+                    'prior': 0.0,
+                    'entropy': 0.0, 
+                    'confidence': 0.0, 
+                    'constraint': -lambda_constraint*2, 
+                    'density_bonus': 0.0,          
+                    'density_penalty': 0.0,
+                    'info_propagation': 0.0
                 }
 
         # Get normalization factors
@@ -595,26 +815,36 @@ class ELBOComputation:
         posterior_entropy_raw = self.compute_posterior_entropy_batch(
             conditional_probs, marginal_probs, network_data, node_batch, max_timestep
         )
-        sparsity_reg_raw = self.compute_sparsity_regularization(marginal_probs)
+        confidence_reg_raw = self.compute_confidence_regularization(marginal_probs)
 
         constraint_penalty_raw = self.compute_constraint_penalty(
         features, states, distances, node_batch, network_data, 
         gumbel_samples, max_timestep
         )
 
-        density_bonus_raw = self.compute_connection_density_bonus(marginal_probs)
+        timestep_density_penalty = self.compute_type_specific_density_penalty(
+            marginal_probs, network_data, max_timestep
+        )
+
+        info_propagation_penalty = self.compute_information_propagation_penalty(
+        marginal_probs, network_data, max_timestep
+        )
+
+        # density_bonus_raw = self.compute_connection_density_bonus(marginal_probs)
 
         print(f"Raw values - State: {state_likelihood_raw.item():.2f}, "
             f"Obs: {observation_likelihood_raw.item():.2f}, "
             f"Prior: {prior_likelihood_raw.item():.2f}, "
             f"Entropy: {posterior_entropy_raw.item():.2f},"
-            f" Sparsity: {sparsity_reg_raw.item():.2f}, "
+            f" Sparsity: {confidence_reg_raw.item():.2f}, "
             f"Constraint: {constraint_penalty_raw.item():.2f}, "
-            f"Density Bonus: {density_bonus_raw.item():.2f}")
+            f"Timestep Density Penalty: {timestep_density_penalty.item():.2f}, "
+            f"Info Propagation Penalty: {info_propagation_penalty.item():.2f},")
+            #f"Density Bonus: {density_bonus_raw.item():.2f}")
 
         # Calculate actual counts for proper normalization
         # total_state_predictions =  max_timestep * 3  # 3 decision types
-        total_state_predictions = len(gumbel_samples[0]) * len(gumbel_samples)  # 3 decision types per sample
+        total_state_predictions = len(node_batch) * max_timestep * 3  # 3 decision types per sample
         total_network_pairs = len(marginal_probs)  # Actual pairs being evaluated
         print(f"Total state predictions: {total_state_predictions}, Total network pairs: {total_network_pairs}")
         
@@ -623,7 +853,7 @@ class ELBOComputation:
         network_likelihood_per_pair = observation_likelihood_raw / total_network_pairs if total_network_pairs > 0 else torch.tensor(0.0)
         prior_likelihood_per_pair = prior_likelihood_raw / total_network_pairs if total_network_pairs > 0 else torch.tensor(0.0)
         entropy_per_pair = posterior_entropy_raw / total_network_pairs if total_network_pairs > 0 else torch.tensor(0.0)
-        sparsity_per_pair = self.sparsity_weight * sparsity_reg_raw / total_network_pairs if total_network_pairs > 0 else torch.tensor(0.0)
+        confidence_per_pair = self.confidence_weight * confidence_reg_raw / total_network_pairs if total_network_pairs > 0 else torch.tensor(0.0)
         
         print(f"Per-unit values - State: {state_likelihood_per_prediction.item():.4f}, "
             f"Obs: {network_likelihood_per_pair.item():.4f}, "
@@ -631,30 +861,35 @@ class ELBOComputation:
             f"Entropy: {entropy_per_pair.item():.4f}")
         
 
-        weight = get_dynamic_weights(current_epoch)
-        
+        weight = get_dynamic_weights(current_epoch)       
         # Apply adaptive weighting
-        weighted_state_likelihood = weight['state'] * state_likelihood_per_prediction
+        weighted_state_likelihood = weight['state'] * state_likelihood_per_prediction if current_epoch>=200 else torch.tensor(-0.8)
         weighted_observation_likelihood = weight['observation'] * network_likelihood_per_pair
         weighted_prior_likelihood = weight['prior'] * prior_likelihood_per_pair
         weighted_posterior_entropy = weight['entropy'] * entropy_per_pair
-        weighted_sparsity_reg = weight['sparsity'] * sparsity_per_pair
+        weighted_confidence_reg = weight['confidence'] * confidence_per_pair
         weighted_constraint_penalty = weight['constraint'] * constraint_penalty_raw
-        weighted_density_bonus = weight['density_bonus'] * density_bonus_raw
-        
-        # Total weighted ELBO  
-        # total_elbo = (weighted_state_likelihood + weighted_observation_likelihood + 
-        #             weighted_prior_likelihood + weighted_posterior_entropy - weighted_sparsity_reg - weighted_constraint_penalty)
-        total_elbo = (weighted_state_likelihood + weighted_observation_likelihood + 
-                    weighted_prior_likelihood + weighted_posterior_entropy - weighted_sparsity_reg - weighted_constraint_penalty + weighted_density_bonus)
-        
+        weighted_density_penalty = weight['density_penalty'] * timestep_density_penalty
+        weighted_info_propagation = weight['info_propagation'] * info_propagation_penalty
+
+        # weighted_density_bonus = weight['density_bonus'] * density_bonus_raw
+
+        # Total weighted ELBO
+        # total_elbo = (weighted_state_likelihood + weighted_observation_likelihood +
+        #             weighted_prior_likelihood + weighted_posterior_entropy - weighted_confidence_reg - weighted_constraint_penalty)
+        total_elbo = (weighted_state_likelihood + weighted_observation_likelihood +
+                    weighted_prior_likelihood + weighted_posterior_entropy - weighted_confidence_reg -
+                    weighted_constraint_penalty - weighted_density_penalty - weighted_info_propagation)
+
         print(f"Weighted components - State: {weighted_state_likelihood.item():.4f}, "
             f"Obs: {weighted_observation_likelihood.item():.4f}, "
             f"Prior: {weighted_prior_likelihood.item():.4f}, "
             f"Entropy: {weighted_posterior_entropy.item():.4f}")
-        print(f"Sparsity: {weighted_sparsity_reg.item():.4f}, "
+        print(f"Sparsity: {weighted_confidence_reg.item():.4f}, "
             f"Constraint: {weighted_constraint_penalty.item():.4f}, "
-            f"Density Bonus: {weighted_density_bonus.item():.4f}")
+            f"Timestep Density Penalty: {weighted_density_penalty.item():.4f}, "
+            f"Info Propagation: {weighted_info_propagation.item():.4f}")
+            # f"Density Bonus: {weighted_density_bonus.item():.4f}")
         print(f"Total weighted ELBO: {total_elbo.item():.4f}")
 
         return {
@@ -662,8 +897,10 @@ class ELBOComputation:
             'observation_likelihood': weighted_observation_likelihood, 
             'prior_likelihood': weighted_prior_likelihood,
             'posterior_entropy': weighted_posterior_entropy,
-            'sparsity_regularization': weighted_sparsity_reg,
+            'confidence_regularization': weighted_confidence_reg,
             'constraint_penalty': weighted_constraint_penalty,
-            'density_bonus': weighted_density_bonus,
+            'density_penalty': weighted_density_penalty,
+            'info_propagation_penalty': weighted_info_propagation,
+            # 'density_bonus': weighted_density_bonus,
             'total_elbo': total_elbo
         }

@@ -176,14 +176,16 @@ def create_inference_components(models: Dict[str, Any], L: int, use_sparsity: bo
     gumbel_sampler = GumbelSoftmaxSampler()
     
     # Create ELBO computer with optional sparsity regularization
-    sparsity_weight = TRAINING_CONFIG['sparsity_weight'] if use_sparsity else 0.0
+    confidence_weight = TRAINING_CONFIG['confidence_weight'] if use_sparsity else 0.0
     elbo_computer = ELBOComputation(
         models['network_evolution'], 
         models['state_transition'],
-        sparsity_weight=sparsity_weight
+        rho_1=TRAINING_CONFIG['rho_1'],
+        rho_2=TRAINING_CONFIG['rho_2'],
+        confidence_weight=confidence_weight
     )
     
-    print(f"✓ Sparsity regularization: {'enabled' if use_sparsity else 'disabled'} (weight={sparsity_weight})")
+    print(f"✓ Sparsity regularization: {'enabled' if use_sparsity else 'disabled'} (weight={confidence_weight})")
     
     # Create trainer
     trainer = NetworkStateTrainer(
@@ -233,10 +235,13 @@ def train_model(data: Dict[str, Any], loader: DataLoader, inference_components: 
             states=train_data['states'],
             distances=train_data['distances'],
             network_data=train_data['observed_network'],
+            ground_truth_network=data['ground_truth_network'],
             max_timestep=train_data['n_timesteps'] - 1,
             max_epochs=max_epochs,
             node_batches=node_batches,
-            verbose=True
+            verbose=True,
+            early_stopping=True,
+            patience=200
         )
     else:
         print(f"Using full-batch training (network size: {n_households})")
@@ -247,9 +252,12 @@ def train_model(data: Dict[str, Any], loader: DataLoader, inference_components: 
             states=train_data['states'],
             distances=train_data['distances'],
             network_data=train_data['observed_network'],
+            ground_truth_network=data['ground_truth_network'],
             max_timestep=train_data['n_timesteps'] - 1,
             max_epochs=max_epochs,
-            verbose=True
+            verbose=True,
+            early_stopping=False,
+            patience=200
         )
     
     print("✓ Training completed")
@@ -280,7 +288,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     elbo_params = {
         'rho_1': inference_components['elbo_computer'].rho_1.item(),
         'rho_2': inference_components['elbo_computer'].rho_2.item(),
-        'sparsity_weight': inference_components['elbo_computer'].sparsity_weight
+        'confidence_weight': inference_components['elbo_computer'].confidence_weight
     }
     
     # Training metadata
@@ -304,7 +312,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     }
     
     # Save complete model
-    model_path = 'saved_models/trained_model_ruxiao_v3_new_elbo_norm_imbalance_pred_epoch_300_seed23.pth'
+    model_path = 'saved_models/trained_model_ruxiao_density_info_penalty3_rho50_overfit1_epoch_400_q128_64_64_32_seed22.pth' 
     torch.save({
         'model_state': model_state,
         'elbo_params': elbo_params,
@@ -315,7 +323,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     print(f"✓ Model saved to {model_path}")
     
     # Save training history as JSON for analysis
-    history_path = 'logs/training_history_ruxiao_v3_new_elbo_norm_imbalance_pred_epoch_300_seed23.json'
+    history_path = 'logs/training_history_ruxiao_density_info_penalty3_rho50_overfit1_epoch_400_q128_64_64_32_seed22.json'
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
     
@@ -336,9 +344,9 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
         if 'sparsity_regularization' in final_metrics:
             print(f"  Sparsity regularization: {final_metrics['sparsity_regularization']:.4f}")
         
-        print(f"\nObservation model parameters:")
-        print(f"  ρ₁ (bonding miss rate): {final_metrics['rho_1']:.4f}")
-        print(f"  ρ₂ (bridging miss rate): {final_metrics['rho_2']:.4f}")
+        # print(f"\nObservation model parameters:")
+        # print(f"  ρ₁ (bonding miss rate): {final_metrics['rho_1']:.4f}")
+        # print(f"  ρ₂ (bridging miss rate): {final_metrics['rho_2']:.4f}")
         
         print(f"\nTraining info:")
         print(f"  Total epochs: {len(history)}")
@@ -375,7 +383,7 @@ def main():
             loader=loader,
             inference_components=inference_components,
             train_end_time=15,  # Train on timesteps 0-15, test on 16-24
-            max_epochs=300
+            max_epochs=400
         )
         
         # 6. Save results
@@ -398,9 +406,9 @@ def main():
 
 if __name__ == "__main__":
     # Set random seeds for reproducibility
-    torch.manual_seed(23)
-    np.random.seed(23)
-    
+    torch.manual_seed(22)
+    np.random.seed(22)
+
     # Run main pipeline
     exit_code = main()
     sys.exit(exit_code)

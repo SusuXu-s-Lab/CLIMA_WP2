@@ -36,7 +36,7 @@ class NetworkStateTrainer:
         all_params.extend(self.elbo_computer.state_transition.influence_nn.parameters())
         all_params.extend(self.elbo_computer.network_evolution.interaction_nn.parameters())
         all_params.extend(self.elbo_computer.network_evolution.parameters())
-        all_params.extend([self.elbo_computer.rho_1, self.elbo_computer.rho_2])
+        # all_params.extend([self.elbo_computer.rho_1, self.elbo_computer.rho_2])
         
         self.optimizer = optim.Adam(all_params, lr=learning_rate, weight_decay=weight_decay)
         
@@ -95,12 +95,78 @@ class NetworkStateTrainer:
         type_counts = torch.bincount(dominant_types, minlength=3)
         type_pcts = type_counts.float() / len(all_probs) * 100
         print(f"    Dominant Types: No Link {type_pcts[0]:.1f}%, Bonding {type_pcts[1]:.1f}%, Bridging {type_pcts[2]:.1f}%")
+
+
+    def monitor_link_prediction_performance(self, marginal_probs, ground_truth_network, max_timestep):
+        """
+        Simple link prediction monitoring - just precision and recall.
+        
+        Args:
+            marginal_probs: Dict[str, torch.Tensor] - marginal probabilities from variational posterior
+            ground_truth_network: NetworkData object with ground truth
+            max_timestep: int - maximum timestep to evaluate
+        
+        Returns:
+            Dict with precision, recall metrics
+        """
+        if len(marginal_probs) == 0:
+            return {'precision': 0.0, 'recall': 0.0}
+        
+        predicted_links = 0
+        true_links = 0 
+        correct_links = 0
+        
+        processed_pairs = set()  # To avoid double counting
+        
+        for pair_key, marginal_prob in marginal_probs.items():
+            # Parse pair_key: "i_j_t"
+            parts = pair_key.split('_')
+            if len(parts) != 3:
+                continue
+            
+            i, j, t = int(parts[0]), int(parts[1]), int(parts[2])
+            
+            # Skip if already processed this pair at this timestep
+            pair_id = (min(i, j), max(i, j), t)
+            if pair_id in processed_pairs:
+                continue
+            processed_pairs.add(pair_id)
+            
+            # Skip if timestep is out of range
+            if t > max_timestep:
+                continue
+            
+            # Prediction: 1 if any connection (argmax > 0), 0 if no connection
+            predicted_exists = 1 if torch.argmax(marginal_prob).item() > 0 else 0
+            
+            # Ground truth
+            true_link_type = ground_truth_network.get_link_type(i, j, t)
+            true_exists = 1 if true_link_type > 0 else 0
+            
+            # Update counters
+            if predicted_exists == 1:
+                predicted_links += 1
+            if true_exists == 1:
+                true_links += 1
+            if predicted_exists == 1 and true_exists == 1:
+                correct_links += 1
+        
+        # Calculate metrics
+        precision = correct_links / predicted_links if predicted_links > 0 else 0.0
+        recall = correct_links / true_links if true_links > 0 else 0.0
+        
+        return {
+            'precision': precision,
+            'recall': recall
+        }
+
     
     def train_epoch_batched(self,
                            features: torch.Tensor,
                            states: torch.Tensor,
                            distances: torch.Tensor,
                            network_data,
+                           ground_truth_network,
                            node_batches: List[torch.Tensor],
                            max_timestep: int,
                            max_epochs: int,
@@ -113,6 +179,12 @@ class NetworkStateTrainer:
         2. Use marginals for sampling
         3. Pass both to ELBO computation
         """
+        if self.epoch >= 300:
+            for param in self.mean_field_posterior.network_type_nn.parameters():
+                param.requires_grad = False
+            for param in self.elbo_computer.network_evolution.parameters():
+                param.requires_grad = False
+        
         
         temperature = self.temperature_schedule(self.epoch, max_epochs)
         num_samples = self.sample_schedule(self.epoch, max_epochs)
@@ -124,7 +196,7 @@ class NetworkStateTrainer:
             'observation_likelihood': 0.0,
             'prior_likelihood': 0.0,
             'posterior_entropy': 0.0,
-            'sparsity_regularization': 0.0,
+            'confidence_regularization': 0.0,
             'constraint_penalty': 0.0
         }
         
@@ -138,15 +210,24 @@ class NetworkStateTrainer:
                     features, states, distances, node_batches[0], network_data, max_timestep)
             print(f"Conditional and marginal probabilities finished for batch {batch_idx + 1}/{len(node_batches)}")
 
+            # Monitor link prediction performance 
+            if batch_idx == 0:  # Only check first batch
+                link_metrics = self.monitor_link_prediction_performance(
+                    marginal_probs, ground_truth_network, max_timestep
+                )
+                print(f"\n=== Epoch {self.epoch} Link inference vs Ground Truth ===")
+                print(f"Link Prediction - Precision: {link_metrics['precision']:.3f}, "
+                    f"Recall: {link_metrics['recall']:.3f}")
+
             if self.epoch < 10 and self.epoch % 1 == 0:
                 print(f"\n=== Epoch {self.epoch} Network Distribution Summary ===")
                 # Recompute to get statistics (only use first batch)
                 self.monitor_network_distributions(marginal_probs)
-            elif self.epoch < 50 and  self.epoch % 2 == 0:
+            elif self.epoch < 50 and  self.epoch % 1 == 0:
                 print(f"\n=== Epoch {self.epoch} Network Distribution Summary ===")
                 # Recompute to get statistics (only use first batch)
                 self.monitor_network_distributions(marginal_probs)
-            elif self.epoch % 5 == 0:
+            elif self.epoch % 2 == 0:
                 print(f"\n=== Epoch {self.epoch} Network Distribution Summary ===")
                 # Recompute to get statistics (only use first batch)
                 self.monitor_network_distributions(marginal_probs)
@@ -185,8 +266,8 @@ class NetworkStateTrainer:
         
         # Clamp observation parameters
         with torch.no_grad():
-            self.elbo_computer.rho_1.clamp_(1e-4, 0.7)
-            self.elbo_computer.rho_2.clamp_(1e-4, 0.8)
+            # self.elbo_computer.rho_1.clamp_(1e-4, 0.7)
+            # self.elbo_computer.rho_2.clamp_(1e-4, 0.8)
             # self.elbo_computer.network_evolution.alpha_bonding.clamp_(1e-4, 0.1)
             # self.elbo_computer.network_evolution.beta_form.clamp_(1e-4, 0.2)
             # self.elbo_computer.network_evolution.gamma.clamp_(1e-4, 0.5)
@@ -212,8 +293,8 @@ class NetworkStateTrainer:
             'temperature': temperature,
             'num_samples': num_samples,
             'num_batches': num_batches,
-            'rho_1': self.elbo_computer.rho_1.item(),
-            'rho_2': self.elbo_computer.rho_2.item(),
+            # 'rho_1': self.elbo_computer.rho_1.item(),
+            # 'rho_2': self.elbo_computer.rho_2.item(),
             **total_metrics
         }
         
@@ -227,6 +308,7 @@ class NetworkStateTrainer:
                         states: torch.Tensor,
                         distances: torch.Tensor,
                         network_data,
+                        ground_truth_network,
                         max_timestep: int,
                         max_epochs: int,
                         lambda_constraint) -> Dict[str, float]:
@@ -235,7 +317,7 @@ class NetworkStateTrainer:
         # Create single batch with all nodes
         all_nodes = torch.arange(features.shape[0], dtype=torch.long)
         return self.train_epoch_batched(
-            features, states, distances, network_data, [all_nodes], max_timestep, max_epochs, lambda_constraint
+            features, states, distances, network_data, ground_truth_network, [all_nodes], max_timestep, max_epochs, lambda_constraint
         )
     
     def train(self,
@@ -243,6 +325,7 @@ class NetworkStateTrainer:
             states: torch.Tensor,
             distances: torch.Tensor,
             network_data,
+            ground_truth_network,
             max_timestep: int,
             max_epochs: int = 1000,
             node_batches: Optional[List[torch.Tensor]] = None,
@@ -273,12 +356,12 @@ class NetworkStateTrainer:
         for _ in progress_bar:
             if use_batching:
                 metrics = self.train_epoch_batched(
-                    features, states, distances, network_data, 
+                    features, states, distances, network_data, ground_truth_network,
                     node_batches, max_timestep, max_epochs, lambda_constraint
                 )
             else:
                 metrics = self.train_epoch_full(
-                    features, states, distances, network_data, 
+                    features, states, distances, network_data, ground_truth_network,
                     max_timestep, max_epochs, lambda_constraint
                 )
 

@@ -141,71 +141,71 @@ class CorrectedModelEvaluator:
         
         return self._create_complete_network(observed_network, inferred_at_t, t)
     
-    def _evaluate_test_period(self, features, ground_truth_states, distances, all_nodes,
-                                observed_network, ground_truth_network, train_end_time, test_end_time):
-            """
-            FIXED test period evaluation:
-            1. Identify target households (inactive at t=15)
-            2. Forward simulate using model inference for entire network (NO test-time observations)
-            3. Evaluate final states + timing
-            """
+    # def _evaluate_test_period(self, features, ground_truth_states, distances, all_nodes,
+    #                             observed_network, ground_truth_network, train_end_time, test_end_time):
+    #         """
+    #         FIXED test period evaluation:
+    #         1. Identify target households (inactive at t=15)
+    #         2. Forward simulate using model inference for entire network (NO test-time observations)
+    #         3. Evaluate final states + timing
+    #         """
             
-            # Identify target households (inactive at train_end_time)
-            target_households = {}
-            for decision_k in range(3):
-                decision_name = ['vacant', 'repair', 'sell'][decision_k]
-                inactive_mask = ground_truth_states[:, train_end_time, decision_k] == 0
-                target_households[decision_name] = torch.where(inactive_mask)[0].tolist()
-                print(f"  Target {decision_name} households: {len(target_households[decision_name])}")
+    #         # Identify target households (inactive at train_end_time)
+    #         target_households = {}
+    #         for decision_k in range(3):
+    #             decision_name = ['vacant', 'repair', 'sell'][decision_k]
+    #             inactive_mask = ground_truth_states[:, train_end_time, decision_k] == 0
+    #             target_households[decision_name] = torch.where(inactive_mask)[0].tolist()
+    #             print(f"  Target {decision_name} households: {len(target_households[decision_name])}")
             
-            # Initialize model states with ground truth up to train_end_time
-            model_states = ground_truth_states[:, :train_end_time+1, :].clone()
+    #         # Initialize model states with ground truth up to train_end_time
+    #         model_states = ground_truth_states[:, :train_end_time+1, :].clone()
             
-            # Forward simulation records
-            test_prediction_records = []
-            test_structure_records = []
+    #         # Forward simulation records
+    #         test_prediction_records = []
+    #         test_structure_records = []
             
-            for t in range(train_end_time, test_end_time):  # 15 to 23 (predict t+1)
-                print(f"  Test step {t} -> {t+1}")
+    #         for t in range(train_end_time, test_end_time):  # 15 to 23 (predict t+1)
+    #             print(f"  Test step {t} -> {t+1}")
                     
-                # 1. State Prediction t -> t+1 (using structure at time t)
-                current_structure = self._get_structure_at_time(observed_network, t)
-                prediction_result = self._predict_states_test_step(
-                    features, model_states, distances, all_nodes,
-                    current_structure, t, target_households
-                )
-                test_prediction_records.append(prediction_result)
+    #             # 1. State Prediction t -> t+1 (using structure at time t)
+    #             current_structure = self._get_structure_at_time(observed_network, t)
+    #             prediction_result = self._predict_states_test_step(
+    #                 features, model_states, distances, all_nodes,
+    #                 current_structure, t, target_households
+    #             )
+    #             test_prediction_records.append(prediction_result)
                 
-                # 2. Update model states with our predictions
-                model_states = torch.cat([model_states, prediction_result['next_states'].unsqueeze(1)], dim=1)
+    #             # 2. Update model states with our predictions
+    #             model_states = torch.cat([model_states, prediction_result['next_states'].unsqueeze(1)], dim=1)
 
-                # 3. FIXED: Infer ENTIRE network at t+1 using model (no test observations)
-                structure_result = self._infer_entire_network_test(
-                    features, model_states, distances, all_nodes, t+1
-                )
-                test_structure_records.append(structure_result)
+    #             # 3. FIXED: Infer ENTIRE network at t+1 using model (no test observations)
+    #             structure_result = self._infer_entire_network_test(
+    #                 features, model_states, distances, all_nodes, t+1
+    #             )
+    #             test_structure_records.append(structure_result)
                 
-                # Store in history for next steps
-                self.inference_history[t+1] = structure_result['inferred_structure']
+    #             # Store in history for next steps
+    #             self.inference_history[t+1] = structure_result['inferred_structure']
             
-            # Evaluate test results
-            test_final_evaluation = self._evaluate_test_final_and_timing(
-                target_households, model_states, ground_truth_states, train_end_time, test_end_time
-            )
+    #         # Evaluate test results
+    #         test_final_evaluation = self._evaluate_test_final_and_timing(
+    #             target_households, model_states, ground_truth_states, train_end_time, test_end_time
+    #         )
             
-            test_structure_evaluation = self._aggregate_test_structure_results(
-                test_structure_records, ground_truth_network, train_end_time
-            )
+    #         test_structure_evaluation = self._aggregate_test_structure_results(
+    #             test_structure_records, ground_truth_network, train_end_time
+    #         )
             
-            return {
-                'target_households': target_households,
-                'final_and_timing_evaluation': test_final_evaluation,
-                'structure_evaluation': test_structure_evaluation,
-                'forward_simulation_records': {
-                    'predictions': test_prediction_records,
-                    'structures': test_structure_records
-                }
-            }
+    #         return {
+    #             'target_households': target_households,
+    #             'final_and_timing_evaluation': test_final_evaluation,
+    #             'structure_evaluation': test_structure_evaluation,
+    #             'forward_simulation_records': {
+    #                 'predictions': test_prediction_records,
+    #                 'structures': test_structure_records
+    #             }
+    #         }
     
     def _evaluate_test_period(self, features, ground_truth_states, distances, all_nodes,
                             observed_network, ground_truth_network, train_end_time, test_end_time):
@@ -270,6 +270,86 @@ class CorrectedModelEvaluator:
                 'structures': test_structure_records
             }
         }
+
+    # def _infer_entire_network_test(self, features, model_states, distances, all_nodes, t):
+    #     """
+    #     Infer ENTIRE network structure at timestep t during test period.
+        
+    #     Unlike training period where we only infer hidden pairs, during test we:
+    #     1. Have NO observational constraints (no test-time observations)
+    #     2. Infer ALL pairs based purely on model dynamics
+    #     3. Use predicted states from previous timesteps
+        
+    #     """
+        
+    #     n_households = features.shape[0]
+        
+    #     # Create a "no observations" network for clean inference
+    #     class NoObservationsNetwork:
+    #         def __init__(self, n_households, n_timesteps):
+    #             self.n_households = n_households
+    #             self.n_timesteps = n_timesteps
+    #             self.all_pairs = [(i, j) for i in range(n_households) for j in range(i + 1, n_households)]
+            
+    #         def is_observed(self, i, j, query_t):
+    #             # No observations in test period - everything is hidden
+    #             return False
+            
+    #         def get_link_type(self, i, j, query_t):
+    #             # No observed links
+    #             return 0
+            
+    #         def get_hidden_pairs(self, query_t):
+    #             # All pairs are hidden
+    #             return self.all_pairs
+            
+    #         def get_observed_edges_at_time(self, query_t):
+    #             # No observed edges
+    #             return []
+        
+    #     # Create network with no observations
+    #     no_obs_network = NoObservationsNetwork(n_households, model_states.shape[1])
+        
+    #     # Get conditional and marginal probabilities for ALL pairs
+    #     conditional_probs, marginal_probs = self.mean_field_posterior.compute_probabilities_batch(
+    #         features, model_states, distances, all_nodes, no_obs_network, t
+    #     )
+        
+    #     # Infer structure for ALL pairs
+    #     inferred_structure = {}
+        
+    #     for i in range(n_households):
+    #         for j in range(i + 1, n_households):
+    #             pair_key = f"{i}_{j}_{t}"
+                
+    #             if pair_key in conditional_probs:
+    #                 # Use conditional probabilities based on previous inferred state
+    #                 conditional_matrix = conditional_probs[pair_key]  # [3, 3]
+                    
+    #                 if t == 0:
+    #                     # Initial timestep: use marginal probabilities
+    #                     inferred_type = torch.argmax(marginal_probs[pair_key]).item()
+    #                 else:
+    #                     # Temporal inference: use conditional based on previous state
+    #                     prev_type = self._get_previous_state_from_history(i, j, t-1)
+    #                     conditional_given_prev = conditional_matrix[prev_type, :]  # [3]
+    #                     inferred_type = torch.argmax(conditional_given_prev).item()
+                    
+    #                 inferred_structure[(i, j)] = inferred_type
+    #             else:
+    #                 # Fallback: use previous state or default
+    #                 if t > 0:
+    #                     prev_type = self._get_previous_state_from_history(i, j, t-1)
+    #                     inferred_structure[(i, j)] = prev_type
+    #                 else:
+    #                     inferred_structure[(i, j)] = 0  # Default: no connection
+        
+    #     return {
+    #         'timestep': t,
+    #         'inferred_structure': inferred_structure,
+    #         'evaluation_scope': 'entire_network'
+    #     }
+
     
     def _infer_structure_step(self, features, states, distances, all_nodes,
                              observed_network, t, is_train=True):
@@ -302,7 +382,7 @@ class CorrectedModelEvaluator:
         for i, j in pairs_to_infer:
             pair_key = f"{i}_{j}_{t}"
             
-            if observed_network.is_observed(i, j, t):
+            if (observed_network.is_observed(i, j, t)) & (is_train):
                 # Use observed value
                 inferred_structure[(i, j)] = observed_network.get_link_type(i, j, t)
             elif pair_key in conditional_probs:
@@ -549,6 +629,8 @@ class CorrectedModelEvaluator:
     def _compute_state_predictions(self, household_indices, decision_k, features,
                                   states, distances, complete_network, t):
         """Compute state predictions using complete network."""
+
+        # print(f"_compute_state_predictions: {t} for decision {decision_k}")
         
         # Create deterministic samples from network structure
         deterministic_samples = {}
@@ -573,9 +655,14 @@ class CorrectedModelEvaluator:
             gumbel_samples=deterministic_samples,
             time=t
         )
+
+        # if t>=15:
+        #     print(f"Activation probabilities at t={t} for decision {decision_k}: {max(activation_probs)}")
+        # if (t>3) & (t<10):
+        #     print(f"Max Activation probabilities at t={t} for decision {decision_k}: {max(activation_probs)}")
         
         # Convert to binary predictions
-        threshold = 0.15
+        threshold = 0.9
         predictions = (activation_probs > threshold).float()
         return predictions
     

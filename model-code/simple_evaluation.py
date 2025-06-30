@@ -33,7 +33,7 @@ def load_model(model_path, device='cpu'):
     # Recreate model components
     network_type_nn = NetworkTypeNN(feature_dim, L,hidden_dim=128)
     self_nn = SelfActivationNN(feature_dim, L,hidden_dim=64)
-    influence_nn = InfluenceNN(feature_dim, L, hidden_dim=128)
+    influence_nn = InfluenceNN(feature_dim, L, hidden_dim=64)
     interaction_nn = InteractionFormationNN(feature_dim, hidden_dim=32)
     
     network_evolution = NetworkEvolution(interaction_nn)
@@ -59,7 +59,8 @@ def load_model(model_path, device='cpu'):
     elbo_params = checkpoint['elbo_params']
     trainer.elbo_computer.rho_1.data = torch.tensor(elbo_params['rho_1'])
     trainer.elbo_computer.rho_2.data = torch.tensor(elbo_params['rho_2'])
-    trainer.elbo_computer.sparsity_weight = elbo_params['sparsity_weight']
+    # trainer.elbo_computer.sparsity_weight = elbo_params['sparsity_weight']
+    trainer.elbo_computer.confidence_weight = elbo_params['confidence_weight']
     
     return trainer
 
@@ -78,7 +79,7 @@ def main():
     train_data, test_data = loader.train_test_split(data, train_end_time=15)
     
     # Load model
-    trainer = load_model(project_root/'saved_models/trained_model_v2_L_3_ruxiao_v3_epoch_100.pth')
+    trainer = load_model(project_root/'saved_models/trained_model_ruxiao_density_info_penalty3_rho50_overfit1_epoch_400_q128_64_64_32_seed22.pth')
     
     # Evaluate
     results = evaluate_model_corrected(trainer, test_data, test_end_time=23)
