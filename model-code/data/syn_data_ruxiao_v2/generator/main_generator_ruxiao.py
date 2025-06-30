@@ -24,7 +24,7 @@ p_block=0.5 # propotion of links are randomly blocked per time step
 Read real Household Nodes
 '''
 # Read T=0 partially observed social links
-df_ori = pd.read_csv('/Users/susangao/Desktop/CLIMA/CODE 4/data/syn_data_ruxiao_v2/generator/household_swinMaryland_20190101.csv')
+df_ori = pd.read_csv('/Users/susangao/Desktop/CLIMA/CODE 4.3/data/syn_data_ruxiao_v2/generator/household_swinMaryland_20190101.csv')
 df_ori = df_ori[['home_1', 'home_2', 'home_1_number', 'home_2_number']]
 
 
@@ -166,10 +166,11 @@ house_states = house_states.sort_values(['time', 'home']).reset_index(drop=True)
 
 print("Simulation finished.")
 
+
 '''
 Save Results
 '''
-folder_path = '/Users/susangao/Desktop/CLIMA/CODE 4/data/syn_data_ruxiao_v2/'
+folder_path = '/Users/susangao/Desktop/CLIMA/CODE 4.3/data/syn_data_ruxiao_v2/'
 if not os.path.exists(folder_path):
     os.makedirs(folder_path)
 
@@ -195,6 +196,18 @@ def block_links_per_timestep(df, p):
 links_long_df=links_long_df.rename(columns={'home_i': 'household_id_1','home_j': 'household_id_2','time': 'time_step'})
 house_df_with_features = house_df_with_features.rename(columns={'home': 'household_id', 'repair_state':'repair',
                                                                 'vacancy_state':'vacancy','sales_state':'sell'})
+# links_long_df=links_long_df[links_long_df['link_type'] !=0]
+# blocked_df = block_links_per_timestep(links_long_df, p=p_block)
+# house_df['latitude'], house_df['longitude'] = zip(*house_df['home'].map(pgh.decode))
+# house_df = house_df.rename(columns={'home': 'household_id'})
+# house_states.to_csv(folder_path+'household_states_raw_rho_20%.csv',index=False)
+# links_long_df.to_csv(folder_path+'ground_truth_network_raw_rho_20%.csv',index=False)
+# blocked_df.to_csv(folder_path+'observed_network_raw_rho_20%.csv',index=False)
+# house_df.to_csv(folder_path+'household_locations_raw_rho_20%.csv',index=False)
+# house_df_with_features.to_csv(folder_path+'household_features_raw_rho_20%.csv', index=False)
+# np.save(folder_path+"inter_t_all_raw_rho_20%.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
+# similarity_df.to_csv(folder_path+"similarity_df_raw_rho_20%.csv")
+
 links_long_df=links_long_df[links_long_df['link_type'] !=0]
 blocked_df = block_links_per_timestep(links_long_df, p=p_block)
 house_df['latitude'], house_df['longitude'] = zip(*house_df['home'].map(pgh.decode))

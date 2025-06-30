@@ -12,7 +12,6 @@ class NetworkEvolution(nn.Module):
         super().__init__()
         self.interaction_nn = interaction_nn
         
-        # 只需要这一个learnable parameter！
         self.alpha_0 = nn.Parameter(torch.tensor(1.0))  # For bonding scaling in initial probabilities
         
         # Register as buffers (for similarity calculation)
@@ -38,12 +37,9 @@ class NetworkEvolution(nn.Module):
         
         if len(demo_dists) > 0:
             # Update buffers with tensor values
-            demo_median = torch.median(torch.stack(demo_dists)) ** 2
-            geo_median = torch.median(torch.stack(geo_dists)) ** 2
-
-            self.sigma_demo_sq.data = max(demo_median ** 2, torch.tensor(1e-6))
-            self.sigma_geo_sq.data = max(geo_median ** 2, torch.tensor(1e-6))
-
+            self.sigma_demo_sq.data = torch.median(torch.stack(demo_dists)) ** 2
+            self.sigma_geo_sq.data = torch.median(torch.stack(geo_dists)) ** 2
+        
         print(f"Normalization: σ_demo² = {self.sigma_demo_sq.item():.4f}, σ_geo² = {self.sigma_geo_sq.item():.4f}")
 
     def similarity(self, features_i, features_j, distances):

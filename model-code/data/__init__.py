@@ -1,9 +1,8 @@
 from .data_loader import DataLoader
 from .synthetic_generator import DisasterRecoveryDataGenerator
-from .syn_generator_chain_structure import ChainNetworkTestGenerator
-# from .synthetic_generator_v2 import DisasterRecoveryDataGeneratorV2
+from .synthetic_generator_v2 import DisasterRecoveryDataGeneratorV2
 
-__all__ = ['DataLoader', 'DisasterRecoveryDataGenerator', 'ChainNetworkTestGenerator']
+__all__ = ['DataLoader', 'DisasterRecoveryDataGenerator', 'DisasterRecoveryDataGeneratorV2']
 
 
 # =============================================================================

@@ -16,6 +16,8 @@ TRAINING_CONFIG = {
     'num_samples_end': 2,
     'learning_rate': 1e-3,
     'weight_decay': 1e-4,  # Built-in L2 regularization
-    'sparsity_weight': 0.5,  # For entropy regularization (optional)
-    'max_epochs': 1000
+    'confidence_weight': 0.5,  # For entropy regularization (optional)
+    'max_epochs': 1000,
+    'rho_1': 0.5,  # Initial rho_1 for ELBO computation
+    'rho_2': 0.5,  # Initial rho_2 for ELBO computation
 }

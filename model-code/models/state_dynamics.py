@@ -81,7 +81,7 @@ class StateTransition:
         """Get continuous link representation."""
         i, j = min(i, j), max(i, j)
         
-        if network_data.is_observed(i, j, time):
+        if network_data.is_observed(i, j, time) & time<=15:
             link_type = network_data.get_link_type(i, j, time)
             link_repr = F.one_hot(torch.tensor(link_type), num_classes=3).float()
         else:

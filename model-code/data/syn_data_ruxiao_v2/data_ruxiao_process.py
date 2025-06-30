@@ -2,10 +2,16 @@ import pandas as pd
 import os
 
 # Set the directory path
-data_dir = "/Users/susangao/Desktop/CLIMA/CODE 4/data/syn_data_ruxiao_v2/"
+data_dir = "/Users/susangao/Desktop/CLIMA/CODE 4.3/data/syn_data_ruxiao_v2"
 
 # Read all CSV files
 print("Reading CSV files...")
+# ground_truth_network = pd.read_csv(os.path.join(data_dir, "ground_truth_network_raw_rho_20%.csv"))
+# household_features = pd.read_csv(os.path.join(data_dir, "household_features_raw_rho_20%.csv"))
+# household_locations = pd.read_csv(os.path.join(data_dir, "household_locations_raw_rho_20%.csv"))
+# household_states = pd.read_csv(os.path.join(data_dir, "household_states_raw_rho_20%.csv"))
+# observed_network = pd.read_csv(os.path.join(data_dir, "observed_network_raw_rho_20%.csv"))
+
 ground_truth_network = pd.read_csv(os.path.join(data_dir, "ground_truth_network_raw.csv"))
 household_features = pd.read_csv(os.path.join(data_dir, "household_features_raw.csv"))
 household_locations = pd.read_csv(os.path.join(data_dir, "household_locations_raw.csv"))
@@ -105,6 +111,21 @@ household_states_processed.rename(columns={'home': 'household_id','sales':'sell'
 print("\nSaving processed files...")
 
 # Save with "_raw" suffix removed
+# ground_truth_processed.to_csv(os.path.join(data_dir, "ground_truth_network_community_one_hot_rho_20%.csv"), index=False)
+# print("Saved ground_truth_network.csv")
+
+# observed_processed.to_csv(os.path.join(data_dir, "observed_network_community_one_hot_rho_20%.csv"), index=False)
+# print("Saved observed_network.csv")
+
+# household_features_processed.to_csv(os.path.join(data_dir, "household_features_community_one_hot_rho_20%.csv"), index=False)
+# print("Saved household_features.csv")
+
+# household_locations_processed.to_csv(os.path.join(data_dir, "household_locations_community_one_hot_rho_20%.csv"), index=False)
+# print("Saved household_loactions.csv")
+
+# household_states_processed.to_csv(os.path.join(data_dir, "household_states_community_one_hot_rho_20%.csv"), index=False)
+# print("Saved household_states.csv")
+
 ground_truth_processed.to_csv(os.path.join(data_dir, "ground_truth_network_community_one_hot.csv"), index=False)
 print("Saved ground_truth_network.csv")
 
