@@ -35,7 +35,6 @@ from inference import (
     TRAINING_CONFIG
 )
 
-
 import torch.nn as nn
 
 def apply_xavier_init(trainer):
@@ -412,3 +411,7 @@ if __name__ == "__main__":
     # Run main pipeline
     exit_code = main()
     sys.exit(exit_code)
+
+import torch
+torch.set_num_threads(4)  # 设置CPU线程数
+print(f"CPU线程数设置为: {torch.get_num_threads()}")
