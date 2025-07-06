@@ -29,7 +29,7 @@ def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.
     link_matrix[triu_indices] = link_types
     link_matrix[(triu_indices[1], triu_indices[0])] = link_types
 
-    output_path = "link_probs.csv"
+    output_path = "sysnthetic_data/link_probs_raw.csv"
     df = pd.DataFrame(probs, columns=["P_no_link", "P_bonding", "P_bridging"])
     df.to_csv(output_path, index=False)
     return pd.DataFrame(link_matrix, index=homes, columns=homes)
