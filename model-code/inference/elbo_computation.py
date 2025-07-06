@@ -4,6 +4,10 @@ from typing import Dict, List, Tuple
 from models import NetworkEvolution, StateTransition
 import pdb
 
+def _safe_log(x: torch.Tensor) -> torch.Tensor:
+    """Numerically safe log."""
+    return torch.log(x.clamp_min(1e-8))
+
 class ELBOComputation:
     """
     Updated ELBO computation following PDF formulation with normalization added.
@@ -26,99 +30,108 @@ class ELBOComputation:
         self.rho_1 = torch.nn.Parameter(torch.tensor(rho_1))  # Probability of observing link type 1
         self.rho_2 = torch.nn.Parameter(torch.tensor(rho_2))  # Probability of observing link type 2
 
-    def compute_state_likelihood_batch(self,
-                                     features: torch.Tensor,
-                                     states: torch.Tensor,
-                                     distances: torch.Tensor,
-                                     node_batch: torch.Tensor,
-                                     network_data,
-                                     gumbel_samples: List[Dict[str, torch.Tensor]],
-                                     max_timestep: int) -> torch.Tensor:
+    def compute_state_likelihood_batch(
+        self,
+        features: torch.Tensor,
+        states: torch.Tensor,
+        distances: torch.Tensor,
+        node_batch: torch.Tensor,
+        network_data,
+        gumbel_samples: List[Dict[str, torch.Tensor]],
+        max_timestep: int,
+    ) -> torch.Tensor:
         """
-        Optimized state likelihood using vectorized operations.
-        Eliminates triple nested loops for significant speedup.
+        Computes the log-likelihood of household state transitions for a batch of nodes,
+        averaged over multiple Gumbel-Softmax samples.
+
+        Key optimizations
+        -----------------
+        1.  All tensors that do NOT depend on the current Gumbel sample are pre-computed
+            once outside the sample loop (undecided masks, labels, class weights, etc.).
+        2.  Inside the sample loop, the only heavy call is
+            `compute_activation_probability`, which IS sample-dependent.
+        3.  Log-probabilities are computed in a fully vectorized form.
         """
-        if len(gumbel_samples) == 0:
-            return torch.tensor(0.0)
-        
-        num_samples = len(gumbel_samples)
-        batch_size = len(node_batch)
-        
-        # Pre-compute undecided mask: [batch_size, max_timestep, 3]
-        # True where states[node_batch, t, decision_k] == 0
-        batch_states = states[node_batch]  # [batch_size, total_timesteps, 3]
-        undecided_mask = (batch_states[:, :max_timestep, :] == 0)  # [batch_size, max_timestep, 3]
-        
-        # Pre-compute actual outcomes: [batch_size, max_timestep, 3]
-        actual_outcomes = batch_states[:, 1:max_timestep+1, :]  # [batch_size, max_timestep, 3]
+        if not gumbel_samples:                             # no samples → zero likelihood
+            return torch.tensor(0.0, device=features.device)
 
-        def compute_dynamic_class_weights_vectorized(activations_batch):
-            """Vectorized class weight computation for multiple batches"""
-            n_positive = activations_batch.sum(dim=0)  # Sum over batch dimension
-            n_total = activations_batch.shape[0]
-            
-            # Handle zero positive cases
-            pos_weight = torch.where(
-                n_positive > 0,
-                torch.clamp(5 * (n_total - n_positive) / n_positive, max=100.0),
-                torch.ones_like(n_positive)
-            )
-            neg_weight = torch.ones_like(pos_weight)
-            
-            return pos_weight, neg_weight
+        device     = features.device
+        batch_idx  = node_batch                           # alias
+        B          = batch_idx.numel()
+        S          = len(gumbel_samples)
 
-        total_likelihood = 0.0
-        
-        # Main optimization: process all samples with minimal loops
-        for sample_idx, current_samples in enumerate(gumbel_samples):
-            sample_likelihood = 0.0
-            
-            # Process all (t, decision_k) combinations more efficiently
-            for t in range(max_timestep):
-                for decision_k in range(3):
-                    # Get mask for current (t, decision_k)
-                    current_undecided = undecided_mask[:, t, decision_k]  # [batch_size]
-                    
-                    if not current_undecided.any():
-                        continue
-                    
-                    # Extract undecided households for this (t, decision_k)
-                    undecided_indices = node_batch[current_undecided]
-                    
-                    if len(undecided_indices) == 0:
-                        continue
-                    
-                    # Compute activation probabilities for undecided households
-                    activation_probs = self.state_transition.compute_activation_probability(
-                        household_idx=undecided_indices,
-                        decision_type=decision_k,
-                        features=features,
-                        states=states,
-                        distances=distances,
-                        network_data=network_data,
-                        gumbel_samples=current_samples,
-                        time=t
-                    )
-                    
-                    # Get corresponding actual outcomes
-                    current_outcomes = actual_outcomes[current_undecided, t, decision_k]
+        # ------------------------------------------------------------
+        # 1. Pre-processing (sample-independent)
+        # ------------------------------------------------------------
+        # states shape: [N, T_total + 1, 3]
+        batch_states   = states[batch_idx]                # [B, T_total + 1, 3]
 
-                    # Vectorized class weight computation
-                    pos_weight, neg_weight = compute_dynamic_class_weights_vectorized(
-                        current_outcomes.unsqueeze(0)
-                    )
-                    
-                    # Vectorized log likelihood computation
-                    pos_log_probs = current_outcomes * torch.log(activation_probs + 1e-8)
-                    neg_log_probs = (1 - current_outcomes) * torch.log(1 - activation_probs + 1e-8)
-                    
-                    weighted_likelihood = (pos_weight[0] * pos_log_probs.sum() + 
-                                         neg_weight[0] * neg_log_probs.sum())
-                    sample_likelihood += weighted_likelihood
-            
-            total_likelihood += sample_likelihood
-        
-        return torch.tensor(total_likelihood / num_samples, dtype=torch.float32)
+        undecided_mask = batch_states[:, :max_timestep] == 0        # [B, T, 3]
+        labels         = batch_states[:, 1 : max_timestep + 1]      # [B, T, 3]
+
+        static_entries = []   # each entry: (t, k, undecided_ids, label_tensor, pos_w, neg_w)
+
+        for t in range(max_timestep):
+            for k in range(3):
+                mask = undecided_mask[:, t, k]            # [B]
+                if not mask.any():
+                    continue
+
+                undecided_ids = batch_idx[mask]           # global household ids, 1-D
+                y             = labels[mask, t, k].float()  # 0/1 labels, 1-D
+
+                n_pos   = y.sum()
+                n_total = y.numel()
+                if n_pos > 0:
+                    pos_w = min(5.0 * (n_total - n_pos) / n_pos, 100.0)
+                else:
+                    pos_w = 1.0
+                neg_w = 1.0
+
+                static_entries.append(
+                    (t, k, undecided_ids, y,
+                    torch.tensor(pos_w, device=device),
+                    torch.tensor(neg_w, device=device))
+                )
+
+        if not static_entries:                           # nothing to score
+            return torch.tensor(0.0, device=device)
+
+        # ------------------------------------------------------------
+        # 2. Loop over Gumbel samples
+        # ------------------------------------------------------------
+        total_ll = 0.0
+        log = torch.log
+        log1p = torch.log1p
+
+        for sample in gumbel_samples:
+            sample_ll = 0.0
+
+            for t, k, undec_ids, y, pos_w, neg_w in static_entries:
+                # activation probabilities, shape [n_u]
+                p = self.state_transition.compute_activation_probability(
+                    household_idx = undec_ids,
+                    decision_type = k,
+                    features      = features,
+                    states        = states,
+                    distances     = distances,
+                    network_data  = network_data,
+                    gumbel_samples= sample,
+                    time          = t,
+                )
+
+                # safe logs
+                log_p     = log(p.clamp_min(1e-8))
+                log_not_p = log1p(-p.clamp_max(1.0 - 1e-8))
+
+                sample_ll += (
+                    pos_w * (y * log_p).sum() +
+                    neg_w * ((1.0 - y) * log_not_p).sum()
+                )
+
+            total_ll += sample_ll
+
+        return total_ll / S
     
 
     def compute_network_observation_likelihood_batch(self,
@@ -165,174 +178,137 @@ class ELBOComputation:
             
             return torch.tensor(total_likelihood) if isinstance(total_likelihood, float) else total_likelihood
     
-    def compute_prior_likelihood_batch(self,
-                                    conditional_probs: Dict[str, torch.Tensor],
-                                    marginal_probs: Dict[str, torch.Tensor],
-                                    features: torch.Tensor,
-                                    states: torch.Tensor,
-                                    distances: torch.Tensor,
-                                    node_batch: torch.Tensor,
-                                    network_data,
-                                    max_timestep: int) -> torch.Tensor:
-            """
-            FIXED: Prior likelihood for COMPLETE graph (observed + hidden).
-            """
-            total_likelihood = 0.0
-            batch_nodes_set = set(node_batch.tolist())
-            
-            # Get ALL pairs involving batch nodes (not just hidden!)
-            def get_all_batch_pairs(t):
-                all_pairs = []
-                for i in range(features.shape[0]):
-                    for j in range(i + 1, features.shape[0]):
-                        if i in batch_nodes_set or j in batch_nodes_set:
-                            all_pairs.append((i, j))
-                return all_pairs
-            
-            # Initial prior (t=0) - same formula for all pairs
-            # print(f"all batch pairs at t=0: {get_all_batch_pairs(0)}")
-            for i, j in get_all_batch_pairs(0):
-                # Get probabilities (observed=one-hot, hidden=marginal)
-                if network_data.is_observed(i, j, 0):
-                    # Observed: use one-hot encoding
-                    observed_type = network_data.get_link_type(i, j, 0)
-                    π_ij = F.one_hot(torch.tensor(observed_type), num_classes=3).float()
+    def compute_prior_likelihood_batch(
+        self,
+        conditional_probs: Dict[str, torch.Tensor],
+        marginal_probs: Dict[str, torch.Tensor],
+        features: torch.Tensor,       # [N, d_f]
+        states: torch.Tensor,         # [N, T+1, d_s]
+        distances: torch.Tensor,      # [N, N]
+        node_batch: torch.Tensor,     # [B]
+        network_data,
+        max_timestep: int
+    ) -> torch.Tensor:
+        """
+        Prior log-likelihood of all edges that touch `node_batch`
+        under the network-evolution model.
+        """
+        N = features.size(0)
+        batch_mask = torch.zeros(N, dtype=torch.bool, device=features.device)
+        batch_mask[node_batch] = True
+
+        pair_list: List[Tuple[int, int]] = [
+            (i, j) for i in range(N) for j in range(i + 1, N)
+            if batch_mask[i] or batch_mask[j]
+        ]
+
+        feat_cache = [features[i].unsqueeze(0) for i in range(N)]
+        eye3 = torch.eye(3, device=features.device)
+
+        total_ll = 0.0
+
+        # t = 0
+
+        for i, j in pair_list:
+            if network_data.is_observed(i, j, 0):
+                l_type = network_data.get_link_type(i, j, 0)
+                pi_0 = F.one_hot(torch.tensor(l_type, device=features.device),
+                                 num_classes=3).float()
+            else:
+                key = f"{i}_{j}_0"
+                if key not in marginal_probs:
+                    continue
+                pi_0 = marginal_probs[key]                      # [3]
+
+            dist_ij = distances[i, j].view(1, 1)               # [1,1]
+
+            init_p = self.network_evolution.initial_probabilities(
+                feat_cache[i], feat_cache[j], dist_ij
+            ).squeeze(0)                                       # [3]
+
+            total_ll += torch.sum(pi_0 * _safe_log(init_p))
+
+        # =======================================================
+        #  t = 1 … T
+        # =======================================================
+        for t in range(1, max_timestep + 1):
+            state_t = states[:, t]                             # [N, d_s]
+
+            for i, j in pair_list:
+                cur_obs  = network_data.is_observed(i, j, t)
+                prev_obs = network_data.is_observed(i, j, t - 1)
+
+                feat_i, feat_j = feat_cache[i], feat_cache[j]
+                dist_ij        = distances[i, j].view(1, 1)    # [1,1]
+                s_i, s_j       = state_t[i].unsqueeze(0), state_t[j].unsqueeze(0)
+
+                # -------------- Hidden → Hidden --------------
+                if not cur_obs and not prev_obs:
+                    key_prev = f"{i}_{j}_{t-1}"
+                    key_curr = f"{i}_{j}_{t}"
+                    if (key_prev not in marginal_probs or
+                        key_curr not in marginal_probs or
+                        key_curr not in conditional_probs):
+                        continue
+
+                    pi_prev = marginal_probs[key_prev]          # [3]
+                    pi_cond = conditional_probs[key_curr]       # [3,3]
+
+                    trans = self.network_evolution.transition_probabilities(
+                        pi_prev.unsqueeze(0), feat_i, feat_j, s_i, s_j, dist_ij
+                    ).squeeze(0)                                # [3,3]
+
+                    total_ll += (pi_prev.unsqueeze(1) * pi_cond *
+                                 _safe_log(trans)).sum()
+
+                # -------------- Hidden → Observed --------------
+                elif cur_obs and not prev_obs:
+                    key_prev = f"{i}_{j}_{t-1}"
+                    if key_prev not in marginal_probs:
+                        continue
+                    pi_prev = marginal_probs[key_prev]          # [3]
+                    k_obs   = network_data.get_link_type(i, j, t)
+
+                    trans = self.network_evolution.transition_probabilities(
+                        eye3,                               
+                        feat_i.expand(3, -1),
+                        feat_j.expand(3, -1),
+                        s_i.expand(3, -1),
+                        s_j.expand(3, -1),
+                        dist_ij.expand(3, -1)
+                    )                                           # [3,3,3]
+
+                    trans_to_obs = trans[range(3), range(3), k_obs]  # [3]
+                    total_ll += torch.sum(pi_prev * _safe_log(trans_to_obs))
+
+                # -------------- Observed → Hidden --------------
+                elif not cur_obs and prev_obs:
+                    key_curr = f"{i}_{j}_{t}"
+                    if key_curr not in marginal_probs:
+                        continue
+                    pi_curr = marginal_probs[key_curr]          # [3]
+                    k_prev  = network_data.get_link_type(i, j, t - 1)
+
+                    trans = self.network_evolution.transition_probabilities(
+                        eye3[k_prev].unsqueeze(0),              # [1,3]
+                        feat_i, feat_j, s_i, s_j, dist_ij
+                    ).squeeze(0)[k_prev]                        # [3]
+
+                    total_ll += torch.sum(pi_curr * _safe_log(trans))
+
+                # -------------- Observed → Observed --------------
                 else:
-                    # Hidden: use marginal probabilities
-                    pair_key = f"{i}_{j}_0"
-                    if pair_key in marginal_probs:
-                        π_ij = marginal_probs[pair_key]
-                    else:
-                        continue  # Skip if no marginal available
-                
-                # Compute initial probabilities from network evolution model
-                feat_i = features[i].unsqueeze(0)
-                feat_j = features[j].unsqueeze(0)
-                dist = distances[i, j].unsqueeze(0).unsqueeze(1)
-                
-                init_probs = self.network_evolution.initial_probabilities(feat_i, feat_j, dist)
-                
-                # Σ π_ij(0)[k] × log p(ℓ_ij(0) = k | θ, ψ)
-                # print(f"i,j: {i},{j}, π_ij: {π_ij}, init_probs: {init_probs.squeeze(0)}")
-                log_prob = torch.sum(π_ij * torch.log(init_probs.squeeze(0) + 1e-8))
-                # print(f"Initial prior for pair {i},{j} at t=0: {log_prob.item()}")
-                total_likelihood += log_prob
-            
-            # Temporal transitions (t >= 1) - handle all 4 cases
-            for t in range(1, max_timestep + 1):
-                for i, j in get_all_batch_pairs(t):
-                    # Determine current and previous observation status
-                    current_observed = network_data.is_observed(i, j, t)
-                    prev_observed = network_data.is_observed(i, j, t-1)
-                    
-                    # Get transition probabilities from network evolution model
-                    feat_i = features[i].unsqueeze(0)
-                    feat_j = features[j].unsqueeze(0)
-                    state_i = states[i, t].unsqueeze(0)
-                    state_j = states[j, t].unsqueeze(0)
-                    dist = distances[i, j].unsqueeze(0).unsqueeze(1)
-                    
-                    if not current_observed and not prev_observed:
-                        # Case 1: Hidden → Hidden (existing implementation)
-                        pair_key_current = f"{i}_{j}_{t}"
-                        pair_key_prev = f"{i}_{j}_{t-1}"
-                        
-                        if (pair_key_current in conditional_probs and 
-                            pair_key_current in marginal_probs and 
-                            pair_key_prev in marginal_probs):
-                            
-                            π_conditional = conditional_probs[pair_key_current]  # [3, 3]
-                            π_prev = marginal_probs[pair_key_prev]  # [3]
-                            
-                            # Get transition probabilities for all previous types
-                            π_prev_expanded = π_prev.unsqueeze(0)  # [1, 3]
-                            trans_probs = self.network_evolution.transition_probabilities(
-                                π_prev_expanded, feat_i, feat_j, state_i, state_j, dist
-                            ).squeeze(0)  # [3, 3]
-                            
-                            # Complex formula: Σ Σ π̄_ij^prev(t-1)[k'] × π_ij(t | k')[k] × log p(k|k', S_t, θ, ψ)
-                            for k_prev in range(3):
-                                for k_curr in range(3):
-                                    prob_contrib = (π_prev[k_prev] * 
-                                                π_conditional[k_prev, k_curr] * 
-                                                torch.log(trans_probs[k_prev, k_curr] + 1e-8))
-                                    total_likelihood += prob_contrib
-                    
-                    elif current_observed and not prev_observed:
-                        # Case 2: Hidden → Observed
-                        pair_key_prev = f"{i}_{j}_{t-1}"
-                        if pair_key_prev in marginal_probs:
-                            π_prev = marginal_probs[pair_key_prev]  # [3]
-                            k_obs = network_data.get_link_type(i, j, t)
-                            
-                            # Get transition probabilities for all 3 previous types
-                            # Use identity matrix to represent all possible previous types
-                            prev_types_all = torch.eye(3)  # [3, 3] - each row is one-hot for k'=0,1,2
-                            
-                            trans_probs = self.network_evolution.transition_probabilities(
-                                prev_types_all, 
-                                feat_i.expand(3, -1),  # Expand to match batch size
-                                feat_j.expand(3, -1), 
-                                state_i.expand(3, -1), 
-                                state_j.expand(3, -1), 
-                                dist.expand(3, -1)
-                            )  # [3, 3, 3]
-                            
-                            # Extract p(k_obs | k_prev) for k_prev = 0, 1, 2
-                            # trans_probs[i, i, k_obs] gives p(k_obs | k_prev=i)
-                            transition_to_obs = torch.tensor([
-                                trans_probs[0, 0, k_obs],  # p(k_obs | k_prev=0)
-                                trans_probs[1, 1, k_obs],  # p(k_obs | k_prev=1) 
-                                trans_probs[2, 2, k_obs]   # p(k_obs | k_prev=2)
-                            ])
-                            
-                            # Compute: Σ π̄_ij^prev(t-1)[k'] × log p(k_obs|k', S_t, θ, ψ)
-                            log_probs = torch.log(transition_to_obs + 1e-8)
-                            prob_contrib = torch.sum(π_prev * log_probs)
-                            total_likelihood += prob_contrib
-                    
-                    elif not current_observed and prev_observed:
-                        # Case 3: Observed → Hidden
-                        pair_key_current = f"{i}_{j}_{t}"
-                        if pair_key_current in marginal_probs:
-                            π_current = marginal_probs[pair_key_current]  # [3]
-                            k_prev_obs = network_data.get_link_type(i, j, t-1)
-                            
-                            # Get transition probabilities from observed previous type
-                            prev_type_tensor = torch.tensor([[k_prev_obs]], dtype=torch.long)
-                            prev_onehot = F.one_hot(prev_type_tensor, num_classes=3).float()
-                            prev_onehot = prev_onehot.squeeze(1)  # [1, 3]
-                            
-                            trans_probs = self.network_evolution.transition_probabilities(
-                                prev_onehot, feat_i, feat_j, state_i, state_j, dist
-                            )  # [1, 3, 3]
-                            
-                            # Sum over current hidden types
-                            for k_curr in range(3):
-                                trans_prob = trans_probs[0, k_prev_obs, k_curr]  # p(k_curr | k_prev_obs, ...)
-                                prob_contrib = π_current[k_curr] * torch.log(trans_prob + 1e-8)
-                                total_likelihood += prob_contrib
-                    
-                    else:
-                        # Case 4: Observed → Observed
-                        k_prev_obs = network_data.get_link_type(i, j, t-1)
-                        k_curr_obs = network_data.get_link_type(i, j, t)
-                        
-                        # Get direct transition probability
-                        prev_type_tensor = torch.tensor([[k_prev_obs]], dtype=torch.long)
-                        prev_onehot = F.one_hot(prev_type_tensor, num_classes=3).float()
-                        prev_onehot = prev_onehot.squeeze(1)  # [1, 3]
-                        
-                        trans_probs = self.network_evolution.transition_probabilities(
-                            prev_onehot, feat_i, feat_j, state_i, state_j, dist
-                        )  # [1, 3, 3]
-                        
-                        prob_contrib = trans_probs[0, k_prev_obs, k_curr_obs]
-                        total_likelihood += torch.log(prob_contrib + 1e-8)
-            
-                    # print(f"i,j: {i},{j}, t: {t}, prob_contrib: {prob_contrib.item()}")
-            
-            return total_likelihood
+                    k_prev = network_data.get_link_type(i, j, t - 1)
+                    k_cur  = network_data.get_link_type(i, j, t)
+
+                    trans = self.network_evolution.transition_probabilities(
+                        eye3[k_prev].unsqueeze(0),              # [1,3]
+                        feat_i, feat_j, s_i, s_j, dist_ij
+                    ).squeeze(0)[k_prev, k_cur]                 # scalar
+
+                    total_ll += _safe_log(trans)
+
+        return total_ll
 
 
     

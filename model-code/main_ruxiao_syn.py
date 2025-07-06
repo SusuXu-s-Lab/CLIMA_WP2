@@ -76,7 +76,7 @@ def setup_project():
     print(f"Working directory: {os.getcwd()}")
 
 
-def generate_or_load_data(data_dir: str = 'data/syn_data_ruxiao_v2', regenerate: bool = False) -> Dict[str, Any]:
+def generate_or_load_data(data_dir: str = 'data/syn_50house_200bri_20bond', regenerate: bool = False) -> Dict[str, Any]:
     """Generate synthetic data or load existing data."""
     
     print("=== Data Preparation ===")
