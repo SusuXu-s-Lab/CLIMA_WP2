@@ -12,7 +12,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Hyper parameter definition
-alpha=0.1
+alpha=0.2
 beta=0.0001
 gamma=0.6
 L=1
@@ -35,7 +35,7 @@ home2 = df_ori[['home_2']].rename(columns={'home_2': 'home'})
 # Merge and remove duplicates
 house_df = pd.concat([home1, home2], ignore_index=True).drop_duplicates(subset='home')
 house_df = house_df.dropna()
-house_df=house_df[:100]
+house_df=house_df[:50]
 '''
 Household Feautres Generation
 '''
@@ -125,7 +125,7 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
     # -------------------------------------------------
     # similarity / interaction may be time-varying; here we fetch for step t
     sim_t = compute_similarity(house_df_with_features)
-    inter_t = compute_interaction_potential(house_df_with_features, house_states, t=t)
+    inter_t = compute_interaction_potential(house_df_with_features, house_states, t=t+1)
     inter_t_list.append(inter_t.copy())
 
     link_next = update_link_matrix_one_step(
@@ -169,7 +169,7 @@ print("Simulation finished.")
 '''
 Save Results
 '''
-folder_path = 'sysnthetic_data'
+folder_path = 'sysnthetic_data/'
 if not os.path.exists(folder_path):
     os.makedirs(folder_path)
 
@@ -195,17 +195,30 @@ def block_links_per_timestep(df, p):
 links_long_df=links_long_df.rename(columns={'home_i': 'household_id_1','home_j': 'household_id_2','time': 'time_step'})
 house_df_with_features = house_df_with_features.rename(columns={'home': 'household_id', 'repair_state':'repair',
                                                                 'vacancy_state':'vacancy','sales_state':'sell'})
+# links_long_df=links_long_df[links_long_df['link_type'] !=0]
+# blocked_df = block_links_per_timestep(links_long_df, p=p_block)
+# house_df['latitude'], house_df['longitude'] = zip(*house_df['home'].map(pgh.decode))
+# house_df = house_df.rename(columns={'home': 'household_id'})
+# house_states.to_csv('sysnthetic_data/household_states.csv',index=False)
+# links_long_df.to_csv('sysnthetic_data/ground_truth_network.csv',index=False)
+# blocked_df.to_csv('sysnthetic_data/observed_network.csv',index=False)
+# house_df.to_csv('sysnthetic_data/household_loactions.csv',index=False)
+# house_df_with_features.to_csv('sysnthetic_data/household_features.csv', index=False)
+# np.save("inter_t_all.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
+# similarity_df.to_csv("similarity_df.csv")
+
+
 links_long_df=links_long_df[links_long_df['link_type'] !=0]
 blocked_df = block_links_per_timestep(links_long_df, p=p_block)
 house_df['latitude'], house_df['longitude'] = zip(*house_df['home'].map(pgh.decode))
 house_df = house_df.rename(columns={'home': 'household_id'})
-house_states.to_csv('sysnthetic_data/household_states.csv',index=False)
-links_long_df.to_csv('sysnthetic_data/ground_truth_network.csv',index=False)
-blocked_df.to_csv('sysnthetic_data/observed_network.csv',index=False)
-house_df.to_csv('sysnthetic_data/household_loactions.csv',index=False)
-house_df_with_features.to_csv('sysnthetic_data/household_features.csv', index=False)
-np.save("inter_t_all.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
-similarity_df.to_csv("similarity_df.csv")
+house_states.to_csv(folder_path+'household_states_raw.csv',index=False)
+links_long_df.to_csv(folder_path+'ground_truth_network_raw.csv',index=False)
+blocked_df.to_csv(folder_path+'observed_network_raw.csv',index=False)
+house_df.to_csv(folder_path+'household_locations_raw.csv',index=False)
+house_df_with_features.to_csv(folder_path+'household_features_raw.csv', index=False)
+np.save(folder_path+"inter_t_all.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
+similarity_df.to_csv(folder_path+"similarity_df_raw.csv")
 
 print("house_states shape :", house_states.shape)
 print("links_long_df shape:", links_long_df.shape)

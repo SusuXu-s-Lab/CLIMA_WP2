@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore')
 
 def visulize_state():
     # Load the household state dataframe
-    df = pd.read_csv("sysnthetic_data/household_states.csv")
+    df = pd.read_csv("sysnthetic_data/household_states_raw.csv")
 
     # Convert time to integer if needed
     df['time'] = df['time'].astype(int)
@@ -38,11 +38,11 @@ def visulize_state():
     plt.xlabel("Time Step")
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("states.png")
+    plt.savefig("images/states.png")
     plt.show()
 
 def visulize_links():
-    df = pd.read_csv("sysnthetic_data/ground_truth_network.csv")
+    df = pd.read_csv("sysnthetic_data/ground_truth_network_raw.csv")
     print("Data shape:", df.shape)
     print("Time steps range:", df['time_step'].min(), "to", df['time_step'].max())
     print("Link types:", df['link_type'].unique())
@@ -61,7 +61,7 @@ def visulize_links():
     plt.ylabel('Number of Links')
     plt.legend(title='Link Type')
     plt.grid(True, alpha=0.3)
-    plt.savefig("links.png")
+    plt.savefig("images/links.png")
     plt.tight_layout()
     plt.show()
 
@@ -113,7 +113,7 @@ def visulize_links():
     print(time_stats.head())
 
 def visulize_interpot_gif():
-    inter_t_all = np.load("inter_t_all.npy")
+    inter_t_all = np.load("sysnthetic_data/inter_t_all_raw.npy")
     gif_frames = []
     temp_dir = "tmp_frames"
     os.makedirs(temp_dir, exist_ok=True)
@@ -134,7 +134,7 @@ def visulize_interpot_gif():
         gif_frames.append(imageio.imread(frame_path))
         plt.close()
 
-    imageio.mimsave("interpot_animation.gif", gif_frames, duration=0.5, loop=0)
+    imageio.mimsave("images/interpot_animation.gif", gif_frames, duration=0.5, loop=0)
 
     for frame in os.listdir(temp_dir):
         os.remove(os.path.join(temp_dir, frame))
@@ -142,7 +142,7 @@ def visulize_interpot_gif():
 
 
 def visulize_sim():
-    similarity_df_loaded = pd.read_csv("similarity_df.csv", index_col=0)
+    similarity_df_loaded = pd.read_csv("sysnthetic_data/similarity_df_raw.csv", index_col=0)
     similarity_matrix = similarity_df_loaded.values
     np.fill_diagonal(similarity_matrix, np.nan)
     values = similarity_matrix.flatten()
@@ -154,12 +154,12 @@ def visulize_sim():
     plt.xlabel("Similarity Value")
     plt.ylabel("Frequency")
     plt.tight_layout()
-    plt.savefig("imilarity_distribution.png")
+    plt.savefig("images/imilarity_distribution.png")
     plt.show()
 
     plt.close()
 def visulize_prob():
-    df=pd.read_csv('link_probs.csv')
+    df=pd.read_csv('sysnthetic_data/link_probs_raw.csv')
     # Plot distributions
     plt.figure(figsize=(8, 6))
     plt.hist(df['P_no_link'], bins=30, alpha=0.6, label='P_no_link', density=True)
@@ -172,7 +172,7 @@ def visulize_prob():
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("prob.png")
+    plt.savefig("images/prob.png")
     plt.show()
 
 visulize_sim()

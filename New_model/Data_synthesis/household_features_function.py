@@ -50,14 +50,17 @@ def compute_interaction_potential(house_df, state_df, t):
     dist_feat = (dist_feat - dist_feat.min()) / (dist_feat.max() - dist_feat.min() + 1e-8)
     # Step 4: concatenate full feature vector as [f_ij, s_i, s_j, dist]
     full_feat = np.concatenate([f_ij, s_i, s_j, dist_feat], axis=2)  # (N, N, 10)
-
-    # Step 5: linear scoring and sigmoid
-    weights = np.array([-2.0, -4.0, -3.0,     # f_ij part
-                        -1.0, -3.0, -1.0,     # s_i part
-                        -1.0, -5.0, -2.0,     # s_j part
-                        -6.0])/10         # dist_ij
+    if t==0:
+        weights = np.array([-2.0, -4.0, -3.0,     # f_ij part
+                            -1.0, -3.0, -1.0,     # s_i part
+                            -1.0, -5.0, -2.0,     # s_j part
+                            -20.0])/5         # dist_ij
+    else:
+        weights = np.array([-2.0, -4.0, -3.0,     # f_ij part
+                            -3.0, -3.0, -1.0,     # s_i part
+                            -1.0, -3.0, -3.0,     # s_j part
+                            -20.0])/2        # dist_ij
     dot = np.tensordot(full_feat, weights, axes=([2], [0]))  # shape (N, N)
     # print("dot range:", dot.min(), dot.max(), dot.mean())
     interaction = 1 / (1 + np.exp(-dot))  # sigmoid
-
     return pd.DataFrame(interaction, index=house_df.index, columns=house_df.index)
