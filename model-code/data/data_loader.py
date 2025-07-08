@@ -85,7 +85,7 @@ class DataLoader:
         n_timesteps = len(states_df['timestep'].unique())
         
         # Normalize feature columns (excluding household_id)
-        feature_cols = [col for col in features_df.columns if col != 'household_id']
+        feature_cols = [col for col in features_df.columns if ((col != 'household_id') and (col != 'home'))]
         features_norm = features_df.copy()
         for col in feature_cols:
             col_values = features_df[col].values.astype(float)
@@ -140,7 +140,7 @@ class DataLoader:
     
     def _create_features_tensor(self, features_df: pd.DataFrame, n_households: int) -> torch.Tensor:
         """Create features tensor [N, F]."""
-        feature_cols = [col for col in features_df.columns if col != 'household_id']
+        feature_cols = [col for col in features_df.columns if ((col != 'household_id') and (col != 'home'))]
         features = torch.zeros((n_households, len(feature_cols)), dtype=torch.float32)
         
         for _, row in features_df.iterrows():

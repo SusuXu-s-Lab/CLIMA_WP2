@@ -10,11 +10,11 @@ from .utils import compute_pairwise_features
 
 class NetworkTypeNN(nn.Module):
     """
-    Updated NN_type: Input [f_ij(t), S_i(t:t-L+1), S_j(t:t-L+1), dist_ij, is_initial]
+    Updated NN_type: Input [f_ij(t), S_i(t:t-L+1), S_j(t:t-L+1), prev_link_type, dist_ij, is_initial]
     
     Changes from original:
-    1. Removed prev_link_type
-    2. Removed is_initial flag
+    1. Added prev_link_type (3-dim one-hot) 
+    2. Added is_initial flag (1-dim)
     3. Restored temporal history parameter L
     4. Will be called 3 times per (i,j,t) to get full 3x3 transition matrix
     """
@@ -22,41 +22,33 @@ class NetworkTypeNN(nn.Module):
     def __init__(self, feature_dim: int, L: int = 1, hidden_dim: int = 64):
         super().__init__()
         self.L = L
-        # Input: f_ij + S_i(t:t-L+1) + S_j(t:t-L+1) + dist_ij + is_initial
-        # We REMOVE the prev_link_type so that we can predict the full 3×3
-        # transition matrix in a single forward pass. This eliminates the
-        # expensive three-fold loop over k_prev.
-        # Dimensions: feature_dim + L*3 + L*3 + 1 + 1
-        input_dim = feature_dim + L * 3 + L * 3 + 1 + 1
+        # Input: f_ij + S_i(t:t-L+1) + S_j(t:t-L+1) + prev_link_type + dist_ij + is_initial
+        # Dimensions: feature_dim + L*3 + L*3 + 3 + 1 + 1
+        input_dim = feature_dim + L * 3 + L * 3 + 3 + 1 + 1
         
         self.network = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            # We output 9 logits that will be reshaped to [3,3]. Softmax will
-            # later be applied row-wise to obtain valid conditional
-            # probabilities for each previous link type.
-            nn.Linear(hidden_dim, 9)
+            nn.Linear(hidden_dim, 3)  # Output 3 logits (will be softmaxed)
         )
     
-    def forward(self, features_i, features_j, state_history_i, state_history_j, distances, is_initial):
-        """Compute logits for the 3×3 transition matrix.
-
+    def forward(self, features_i, features_j, state_history_i, state_history_j, prev_link_type, distances, is_initial):
+        """
         Args:
             features_i, features_j: [batch_size, feature_dim]
-            state_history_i, state_history_j: [batch_size, L*3]
-            distances: [batch_size, 1]
-            is_initial: [batch_size, 1]
-
+            state_history_i, state_history_j: [batch_size, L*3] - state history S_i(t:t-L+1), S_j(t:t-L+1)
+            prev_link_type: [batch_size, 3] - one-hot encoding of previous link type
+            distances: [batch_size, 1] 
+            is_initial: [batch_size, 1] - 1 if t=0, 0 otherwise
+        
         Returns:
-            logits: [batch_size, 3, 3] – raw (un-softmaxed) logits for the
-            conditional probabilities π_ij(t | k_prev).
+            logits: [batch_size, 3] - will be softmaxed to get π_ij(t | prev_type)
         """
         f_ij = compute_pairwise_features(features_i, features_j)
-        x = torch.cat([f_ij, state_history_i, state_history_j, distances, is_initial], dim=1)
-        logits = self.network(x)  # [batch, 9]
-        return logits.view(-1, 3, 3)  # reshape to [batch, 3, 3]
+        x = torch.cat([f_ij, state_history_i, state_history_j, prev_link_type, distances, is_initial], dim=1)
+        return self.network(x)
 
 
 class SelfActivationNN(nn.Module):

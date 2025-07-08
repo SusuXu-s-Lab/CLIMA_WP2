@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 # Set the directory path
-data_dir = "/Users/susangao/Desktop/CLIMA/CODE 4.3/data/syn_data_ruxiao_v2"
+data_dir = "/Users/susangao/Desktop/CLIMA/CODE 4.6/data/syn_data_ruxiao_v2"
 
 # Read all CSV files
 print("Reading CSV files...")
@@ -12,11 +12,11 @@ print("Reading CSV files...")
 # household_states = pd.read_csv(os.path.join(data_dir, "household_states_raw_rho_20%.csv"))
 # observed_network = pd.read_csv(os.path.join(data_dir, "observed_network_raw_rho_20%.csv"))
 
-ground_truth_network = pd.read_csv(os.path.join(data_dir, "ground_truth_network_raw.csv"))
-household_features = pd.read_csv(os.path.join(data_dir, "household_features_raw.csv"))
-household_locations = pd.read_csv(os.path.join(data_dir, "household_locations_raw.csv"))
-household_states = pd.read_csv(os.path.join(data_dir, "household_states_raw.csv"))
-observed_network = pd.read_csv(os.path.join(data_dir, "observed_network_raw.csv"))
+ground_truth_network = pd.read_csv(os.path.join(data_dir, "ground_truth_network_raw_with_log2.csv"))
+household_features = pd.read_csv(os.path.join(data_dir, "household_features_raw_with_log2.csv"))
+household_locations = pd.read_csv(os.path.join(data_dir, "household_locations_raw_with_log2.csv"))
+household_states = pd.read_csv(os.path.join(data_dir, "household_states_raw_with_log2.csv"))
+observed_network = pd.read_csv(os.path.join(data_dir, "observed_network_raw_with_log2.csv"))
 
 print("Data loaded successfully!")
 
@@ -33,7 +33,7 @@ all_household_ids.update(observed_network['household_id_1'].unique())
 all_household_ids.update(observed_network['household_id_2'].unique())
 
 # From feature and location files
-all_household_ids.update(household_features['household_id'].unique())
+all_household_ids.update(household_features['home'].unique())
 all_household_ids.update(household_locations['household_id'].unique())
 
 # From states file (assuming 'home' is household_id)
@@ -67,7 +67,8 @@ observed_processed.rename(columns={'time_step': 'timestep'}, inplace=True)
 # Process household_features_raw.csv
 print("Processing household_features_raw.csv...")
 household_features_processed = household_features.copy()
-household_features_processed['household_id'] = household_features_processed['household_id'].map(id_mapping)
+household_features_processed['household_id'] = household_features_processed['home'].map(id_mapping)
+household_features_processed.drop(columns=['home'], inplace=True, errors='ignore')
 
 # One-hot encode community column
 community_dummies = pd.get_dummies(household_features_processed['community'], prefix='community')
@@ -126,19 +127,19 @@ print("\nSaving processed files...")
 # household_states_processed.to_csv(os.path.join(data_dir, "household_states_community_one_hot_rho_20%.csv"), index=False)
 # print("Saved household_states.csv")
 
-ground_truth_processed.to_csv(os.path.join(data_dir, "ground_truth_network_community_one_hot.csv"), index=False)
+ground_truth_processed.to_csv(os.path.join(data_dir, "ground_truth_network_community_one_hot_with_log2.csv"), index=False)
 print("Saved ground_truth_network.csv")
 
-observed_processed.to_csv(os.path.join(data_dir, "observed_network_community_one_hot.csv"), index=False)
+observed_processed.to_csv(os.path.join(data_dir, "observed_network_community_one_hot_with_log2.csv"), index=False)
 print("Saved observed_network.csv")
 
-household_features_processed.to_csv(os.path.join(data_dir, "household_features_community_one_hot.csv"), index=False)
+household_features_processed.to_csv(os.path.join(data_dir, "household_features_community_one_hot_with_log2.csv"), index=False)
 print("Saved household_features.csv")
 
-household_locations_processed.to_csv(os.path.join(data_dir, "household_locations_community_one_hot.csv"), index=False)
+household_locations_processed.to_csv(os.path.join(data_dir, "household_locations_community_one_hot_with_log2.csv"), index=False)
 print("Saved household_loactions.csv")
 
-household_states_processed.to_csv(os.path.join(data_dir, "household_states_community_one_hot.csv"), index=False)
+household_states_processed.to_csv(os.path.join(data_dir, "household_states_community_one_hot_with_log2.csv"), index=False)
 print("Saved household_states.csv")
 
 # Print summary of changes
