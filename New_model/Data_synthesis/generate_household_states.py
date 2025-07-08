@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import pdb
 
 def generate_T0_states(house_df_with_features, T):
     # Initialize state dataframe: one row per household per time step
@@ -17,17 +18,17 @@ def generate_T0_states(house_df_with_features, T):
         # At t = 0:
         # 1. Assign repair state: only possible if damage > 0
         if damage > 0:
-            p_repair = min(0.4 + 0.4 * damage, 1.0)  # Higher damage → higher chance
+            p_repair = min(0.1 + 0.1 * damage, 1.0)  # Higher damage → higher chance
             repair_0 = int(np.random.rand() < p_repair)
         else:
-            repair_0 = 0
+            repair_0 = int(np.random.rand() < 0.05)
 
         # 2. Assign vacancy state based on community damage level
-        p_vacant = min(0.05 + 0.2 * community_damage.get(community, 0), 0.2)
+        p_vacant = min(0.08 + 0.05 * community_damage.get(community, 0), 0.2)
         vacant_0 = int(np.random.rand() < p_vacant)
 
         # 3. Assign sales state similarly
-        p_sales = min(0.05 + 0.05 * community_damage.get(community, 0), 0.2)
+        p_sales = min(0.02 + 0.05 * community_damage.get(community, 0), 0.2)
         sales_0 = int(np.random.rand() < p_sales)
 
         for t in range(T):
@@ -75,8 +76,6 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
     full_states_df : DataFrame
         Same object, but states at time t+1 for dimension k are updated.
     """
-    p_self_series=p_self_series/10
-    p_ji_df=p_ji_df/10
     state_cols = ['repair_state', 'vacancy_state', 'sales_state']
     k_col      = state_cols[k]
 
@@ -94,8 +93,9 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
     for i, h_i in enumerate(homes):
         if k == 0:
             damage_level = house_df_with_features.set_index('home').loc[h_i, 'damage_level']
-            if damage_level <= 0:
-                next_df.at[h_i, k_col] = 0
+
+            if damage_level == 0 and int(np.random.rand() > 0.05):
+                # next_df.at[h_i, k_col] = 0
                 continue
         other_state_cols = [col for j, col in enumerate(state_cols) if j != k]
         already_active = cur_df.loc[h_i, other_state_cols].sum() > 0

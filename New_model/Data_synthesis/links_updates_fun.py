@@ -80,11 +80,13 @@ def compute_p_self(house_df, full_state_df, t, k, L=3):
     ], axis=1)  # final shape = (N, 3 + 2L + 1)
 
     # (4) weights
-    w_static = np.array([1.0, 0.5, 0.5])             # income, age, race
-    w_hist   = np.full(2 * L, -0.8)                  # L steps of 2 non-k dims
-    w_time = np.array([-15])
-    weights  = np.concatenate([w_static, w_hist, w_time])/50
+    # w_static = np.array([0.1, 0.2, 0.2])             # income, age, race
+    w_static = np.array([-5, -7, -9])             # income, age, race  # Has to be negative, otherwise p_ij will be bigger than 0.5 at first few time step
 
+    w_hist   = np.full(2 * L, -9)                  # L steps of 2 non-k dims
+    w_time = np.array([-4])
+    weights  = np.concatenate([w_static, w_hist, w_time])
+    
     assert weights.shape[0] == all_feat.shape[1], "Shape mismatch in feature × weight"
 
     # (5) sigmoid scoring
@@ -147,20 +149,33 @@ def compute_p_ji_linear(link_df,
          time_feat],  # (N,N,1)
         axis=-1)  # -> (N,N,3+4L+2)
 
+    # Standardization
+    D = feat_all.shape[-1]
+    feat_all_norm = np.empty_like(feat_all)
+
+    for d in range(D):
+        x = feat_all[..., d]
+        x_min = np.nanmin(x)
+        x_max = np.nanmax(x)
+        if np.isclose(x_max, x_min):  
+            feat_all_norm[..., d] = 0.0
+        else:
+            feat_all_norm[..., d] = (x - x_min) / (x_max - x_min)
+    
+
     # ---------- (4) weighted linear score ----------
-    w_demo   = np.array([-2.0, -1.5, -1.5])
-    w_hist   = np.full(2 * L, -1.0)                # applies to both src & tgt
-    w_link   = np.array([0.8])
-    w_dist   = np.array([-4])
-    w_time = np.array([-15.0])
-    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])/50     # (3+4L+2,)
-    scores = np.tensordot(feat_all, weights, axes=([-1], [0]))             # (N,N)
+    w_demo   = np.array([-17.0, -18, -17])
+    w_hist   = np.full(2 * L, -8.0)                # applies to both src & tgt
+    w_link   = np.array([5])
+    w_dist   = np.array([-25])
+    w_time = np.array([-20.0])
+    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])    # (3+4L+2,)
+    scores = np.tensordot(feat_all_norm, weights, axes=([-1], [0]))             # (N,N)
     p_mat  = 1.0 / (1.0 + np.exp(-scores))                                 # sigmoid
 
     # ---------- (5) mask out self-pairs & absent links ----------
     mask = (link_mat == 0) | np.eye(N, dtype=bool)
     p_mat[mask] = 0.0
-
     return pd.DataFrame(p_mat, index=homes, columns=homes)
 
 def update_link_matrix_one_step(similarity_df: pd.DataFrame,
