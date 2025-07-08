@@ -9,16 +9,18 @@ import numpy as np
 from tqdm import tqdm
 import os
 import warnings
+from probability_logger import log_generator_probabilities
 warnings.filterwarnings("ignore")
 
 # Hyper parameter definition
-alpha=0.2
+alpha=0.1
 beta=0.0001
 gamma=0.6
 L=1
 state_dims = ['vacancy_state', 'repair_state', 'sales_state']
 T = 24          # total horizon (t = 0 … T-1  →  produce T steps of NEW state)
 p_block=0.5 # propotion of links are randomly blocked per time step
+
 
 '''
 Read real Household Nodes
@@ -40,6 +42,27 @@ house_df=house_df[:50]
 Household Feautres Generation
 '''
 house_df_with_features = generate_household_features(house_df)
+
+def create_standard_id_mapping(house_df):
+    """Create index mapping consistent with data_ruxiao_process.py"""
+    all_household_ids = set()
+    all_household_ids.update(house_df['home'].unique())  # Use 'home' column
+    
+    household_ids_sorted = sorted(list(all_household_ids))
+    
+    geohash_to_final_id = {old_id: new_id for new_id, old_id in enumerate(household_ids_sorted, 1)}
+    geohash_to_model_idx = {old_id: new_id-1 for old_id, new_id in geohash_to_final_id.items()}
+    
+    print(f"Created mapping for {len(household_ids_sorted)} households")
+    print(f"Sample mapping: {list(geohash_to_model_idx.items())[:3]}")
+    
+    return geohash_to_final_id, geohash_to_model_idx
+
+# Create mapping BEFORE any renaming
+geohash_to_final_id, geohash_to_model_idx = create_standard_id_mapping(house_df_with_features)
+
+# Add processed ID column but keep original 'home' column
+house_df_with_features['household_id'] = house_df_with_features['home'].map(geohash_to_final_id)
 
 
 '''
@@ -82,21 +105,16 @@ initial_links_df = generate_initial_links(similarity_df, interaction_df, alpha_0
 # ---- store link matrices for each t (t index aligned with "time") ----------
 link_snapshots = {0: initial_links_df.copy()}
 inter_t_list = []
-
-# ---- store p_self and p_ji statistics for each time step ----
-p_self_stats = []  # Will store records of {t, k, p_self_mean}
-p_ji_stats = []    # Will store records of {t, k, p_ji_nonzero_mean}
-
 # ---------------- main simulation loop (t = 0 … T-1) -----------------------
-for t in tqdm(range(T - 1)):              # we already have states at t, produce t+1
+generator_probability_log = [] 
+
+for t in tqdm(range(T - 1)):
     print(f'--- sim step  {t}  →  {t+1} ---')
 
-    # -------------------------------------------------
-    # state-update for each dimension k ∈ {0,1,2}
-    # -------------------------------------------------
     for k, k_col in enumerate(state_dims):
+        print(f"Processing state dimension: {k_col} (k={k})")
 
-        # --- compute p_self and p_ji for current (t, k) ---------------------
+        # Compute probabilities (your existing code)
         p_self = compute_p_self(
             house_df_with_features.set_index('home'),
             house_states,
@@ -106,63 +124,45 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
         )
 
         p_ji = compute_p_ji_linear(
-            link_snapshots[t],                # links at time t
+            link_snapshots[t],
             house_df_with_features,
             house_states,
             t=t/T,
             k=k,
             L=L
         )
-        
-        # ---- Record statistics for p_self and p_ji ----
-        # Record p_self mean
-        p_self_mean = p_self.mean()
-        p_self_stats.append({
-            'time_step': t,
-            'dimension': k,
-            'dimension_name': state_dims[k],
-            'p_self_mean': p_self_mean
-        })
-        
-        # Record p_ji non-zero mean
-        p_ji_values = p_ji.values
-        nonzero_mask = p_ji_values != 0
-        if nonzero_mask.any():
-            p_ji_nonzero_mean = p_ji_values[nonzero_mask].mean()
-        else:
-            p_ji_nonzero_mean = 0.0
-        
-        p_ji_stats.append({
-            'time_step': t,
-            'dimension': k,
-            'dimension_name': state_dims[k],
-            'p_ji_nonzero_mean': p_ji_nonzero_mean,
-            'nonzero_count': nonzero_mask.sum()
-        })
-        
-        # --- update states (writes into time t+1 row) -----------------------
+
+        # print(f"p_ji mean: {p_ji.mean()}, p_self mean: {p_self.mean()}")
+        # print(f"p_ji shape: {p_ji.shape}, p_self shape: {p_self.shape}")
+        # print(f"p_ji max: {p_ji.max()}, p_self max: {p_self.max()}")
+
+        # NEW: Log detailed probabilities before using them
+        detailed_entries = log_generator_probabilities(
+            p_self, p_ji, link_snapshots[t], house_states, t, k, 
+            house_df_with_features, geohash_to_model_idx  # Pass correct mapping
+        )
+        generator_probability_log.extend(detailed_entries)
+
+        # Continue with existing state update code
         house_states = update_full_states_one_step(
             house_df_with_features,
-            house_states,                     # full long table
+            house_states,
             p_self,
             p_ji,
-            link_snapshots[t],                # links at t
+            link_snapshots[t],
             t=t,
             k=k
         )
 
-    # -------------------------------------------------
-    # link-transition   G_t  →  G_{t+1}
-    # -------------------------------------------------
-    # similarity / interaction may be time-varying; here we fetch for step t
+    # Continue with existing link transition code
     sim_t = compute_similarity(house_df_with_features)
-    inter_t = compute_interaction_potential(house_df_with_features, house_states, t=t+1)
+    inter_t = compute_interaction_potential(house_df_with_features, house_states, t=t)
     inter_t_list.append(inter_t.copy())
 
     link_next = update_link_matrix_one_step(
         sim_t,
         inter_t,
-        link_snapshots[t],                    # G_t
+        link_snapshots[t],
         house_states,
         t=t,
         alpha_bonding=alpha,
@@ -170,7 +170,7 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
         gamma=gamma
     )
 
-    link_snapshots[t + 1] = link_next        # store snapshot for next step
+    link_snapshots[t + 1] = link_next
 
 # ---------------------------------------------------------------------------
 # after loop:  merge link snapshots & export results
@@ -196,6 +196,7 @@ house_states = house_states.sort_values(['time', 'home']).reset_index(drop=True)
 # ---------------------------------------------------------------------------
 
 print("Simulation finished.")
+
 
 '''
 Save Results
@@ -224,28 +225,39 @@ def block_links_per_timestep(df, p):
     return df_blocked
 
 links_long_df=links_long_df.rename(columns={'home_i': 'household_id_1','home_j': 'household_id_2','time': 'time_step'})
-house_df_with_features = house_df_with_features.rename(columns={'home': 'household_id', 'repair_state':'repair',
+house_df_with_features = house_df_with_features.rename(columns={'repair_state':'repair',
                                                                 'vacancy_state':'vacancy','sales_state':'sell'})
 
 links_long_df=links_long_df[links_long_df['link_type'] !=0]
 blocked_df = block_links_per_timestep(links_long_df, p=p_block)
 house_df['latitude'], house_df['longitude'] = zip(*house_df['home'].map(pgh.decode))
 house_df = house_df.rename(columns={'home': 'household_id'})
-house_states.to_csv(folder_path+'household_states_raw.csv',index=False)
-links_long_df.to_csv(folder_path+'ground_truth_network_raw.csv',index=False)
-blocked_df.to_csv(folder_path+'observed_network_raw.csv',index=False)
-house_df.to_csv(folder_path+'household_locations_raw.csv',index=False)
-house_df_with_features.to_csv(folder_path+'household_features_raw.csv', index=False)
-np.save(folder_path+"inter_t_all.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
-similarity_df.to_csv(folder_path+"similarity_df_raw.csv")
+house_states.to_csv(folder_path+'household_states_raw_with_log2.csv',index=False)
+links_long_df.to_csv(folder_path+'ground_truth_network_raw_with_log2.csv',index=False)
+blocked_df.to_csv(folder_path+'observed_network_raw_with_log2.csv',index=False)
+house_df.to_csv(folder_path+'household_locations_raw_with_log2.csv',index=False)
+house_df_with_features.to_csv(folder_path+'household_features_raw_with_log2.csv', index=False)
+np.save(folder_path+"inter_t_all_raw_with_log2.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
+similarity_df.to_csv(folder_path+"similarity_df_raw_with_log2.csv")
 
-# ---- Save p_self and p_ji statistics ----
-# Convert statistics lists to DataFrames
-p_self_df = pd.DataFrame(p_self_stats)
-p_ji_df = pd.DataFrame(p_ji_stats)
+print("house_states shape :", house_states.shape)
+print("links_long_df shape:", links_long_df.shape)
+print("links_long_df shape:", blocked_df.shape)
 
-# Save statistics to CSV files
-p_self_df.to_csv(folder_path+"p_self_statistics.csv", index=False)
-p_ji_df.to_csv(folder_path+"p_ji_statistics.csv", index=False)
+import pickle
+with open(folder_path + 'detailed_generator_probabilities.pkl', 'wb') as f:
+    pickle.dump({
+        'detailed_log': generator_probability_log,
+        'household_order_geohash': house_df_with_features['home'].tolist(),  # Original geohash order
+        'household_order_processed': house_df_with_features['household_id'].tolist(),  # Processed ID order
+        'household_to_index': geohash_to_model_idx,  # geohash -> 0-based model index
+        'geohash_to_final_id': geohash_to_final_id,  # geohash -> 1-based processed ID
+        'metadata': {
+            'total_timesteps': T,
+            'decision_types': state_dims,
+            'L': L
+        }
+    }, f)
 
-
+print(f"Saved {len(generator_probability_log)} detailed probability entries")
+print(f"Saved mapping for {len(geohash_to_model_idx)} households")
