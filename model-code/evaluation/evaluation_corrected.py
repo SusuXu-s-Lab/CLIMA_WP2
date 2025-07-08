@@ -14,6 +14,7 @@ import numpy as np
 from typing import Dict, List, Tuple
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 from data.data_loader import NetworkData
+from evaluation.probability_comparator import ProbabilityComparator
 
 
 class CorrectedModelEvaluator:
@@ -25,6 +26,10 @@ class CorrectedModelEvaluator:
         self.mean_field_posterior = mean_field_posterior
         self.state_transition = state_transition
         self.inference_history = {}  # {t: {(i,j): inferred_type}}
+
+        self.probability_comparator = ProbabilityComparator('/Users/susangao/Desktop/CLIMA/CODE 4.6/data/syn_data_ruxiao_v2/detailed_generator_probabilities.pkl')
+        self.all_detailed_logs = []  # Store all detailed probability logs
+
     
     def evaluate_model(self,
                       features: torch.Tensor,
@@ -630,7 +635,8 @@ class CorrectedModelEvaluator:
                                   states, distances, complete_network, t):
         """Compute state predictions using complete network."""
 
-        # print(f"_compute_state_predictions: {t} for decision {decision_k}")
+        print(f"_compute_state_predictions: {t} for decision {decision_k}")
+        print(f"Household indices length: {len(household_indices)}")
         
         # Create deterministic samples from network structure
         deterministic_samples = {}
@@ -645,16 +651,27 @@ class CorrectedModelEvaluator:
                 ).float()
         
         # Compute activation probabilities
-        activation_probs = self.state_transition.compute_activation_probability(
-            household_idx=household_indices,
-            decision_type=decision_k,
-            features=features,
-            states=states,
-            distances=distances,
-            network_data=complete_network,
-            gumbel_samples=deterministic_samples,
-            time=t
-        )
+        if len(household_indices) > 0:
+            activation_probs, detailed_breakdown = self.state_transition.compute_detailed_activation_probability(
+                household_idx=household_indices,
+                decision_type=decision_k,
+                features=features,
+                states=states,
+                distances=distances,
+                network_data=complete_network,
+                gumbel_samples=deterministic_samples,
+                time=t
+            )
+            
+            # Store detailed logs for later analysis
+            self.all_detailed_logs.extend(detailed_breakdown)
+            
+            # Compare with generator at key timesteps
+            if t in [2, 5, 10, 16, 20] and self.probability_comparator.generator_data is not None:
+                self.probability_comparator.compare_probabilities(detailed_breakdown, t, decision_k)
+        else:
+            # Fallback for empty household_indices
+            activation_probs = torch.tensor([])
 
         # if t>=15:
         #     print(f"Activation probabilities at t={t} for decision {decision_k}: {max(activation_probs)}")
@@ -1151,6 +1168,13 @@ class CorrectedModelEvaluator:
     
 #     print("\n" + "="*80)
 
+
+    def finalize_probability_analysis(self):
+        """Call this at the end of evaluation to analyze overall patterns"""
+        if hasattr(self, 'probability_comparator') and hasattr(self, 'all_detailed_logs'):
+            self.probability_comparator.analyze_overall_patterns(self.all_detailed_logs)
+
+
 def print_evaluation_results(results, ground_truth_network, trainer):
     """Print comprehensive evaluation results with step-by-step details."""
     
@@ -1511,5 +1535,8 @@ def evaluate_model_corrected(trainer, test_data, train_end_time=15, test_end_tim
         train_end_time=train_end_time,
         test_end_time=test_end_time
     )
+    
+    # Store evaluator reference for later access
+    trainer.evaluator = evaluator
     
     return results

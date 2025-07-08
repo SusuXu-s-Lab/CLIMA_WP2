@@ -35,6 +35,7 @@ from inference import (
     TRAINING_CONFIG
 )
 
+
 import torch.nn as nn
 
 def apply_xavier_init(trainer):
@@ -57,29 +58,28 @@ def apply_xavier_init(trainer):
                     nn.init.constant_(module.bias, 0.0)
 
 
+CONFIG = {
+    'data_dir': 'data/syn_data_ruxiao_v2/syn_50house_200bri_20bond', # Directory for synthetic data
+    'models_dir': 'saved_models',
+    'logs_dir': 'logs'
+}
+
 def setup_project():
-    """Setup project directories and working directory."""
-    # Set working directory to project root
+    """Actually useful setup function."""
     os.chdir(project_root)
-    print(f"Setting working directory to: {project_root}")
     
-    # Create necessary directories
-    data_dir = project_root / 'data/syn_data_ruxiao_v2'
-    models_dir = project_root / 'saved_models'
-    logs_dir = project_root / 'logs'
+    # Create all directories
+    for dir_path in CONFIG.values():
+        Path(dir_path).mkdir(parents=True, exist_ok=True)
     
-    data_dir.mkdir(exist_ok=True)
-    models_dir.mkdir(exist_ok=True)
-    logs_dir.mkdir(exist_ok=True)
-    
-    print(f"Project root: {project_root}")
-    print(f"Working directory: {os.getcwd()}")
+    print(f"✓ Working directory: {project_root}")
+    print(f"✓ Data directory: {CONFIG['data_dir']}")
 
-
-def generate_or_load_data(data_dir: str = 'data/syn_50house_200bri_20bond', regenerate: bool = False) -> Dict[str, Any]:
+def generate_or_load_data(data_dir: str = 'data/syn_data_ruxiao_v2', regenerate: bool = False) -> Dict[str, Any]:
     """Generate synthetic data or load existing data."""
     
     print("=== Data Preparation ===")
+    print(f"Data directory: {data_dir}")
     
     # Check if data files exist
     data_files = [
@@ -240,7 +240,7 @@ def train_model(data: Dict[str, Any], loader: DataLoader, inference_components: 
             node_batches=node_batches,
             verbose=True,
             early_stopping=True,
-            patience=200
+            patience=30
         )
     else:
         print(f"Using full-batch training (network size: {n_households})")
@@ -255,8 +255,8 @@ def train_model(data: Dict[str, Any], loader: DataLoader, inference_components: 
             max_timestep=train_data['n_timesteps'] - 1,
             max_epochs=max_epochs,
             verbose=True,
-            early_stopping=False,
-            patience=200
+            early_stopping=True,
+            patience=30
         )
     
     print("✓ Training completed")
@@ -311,7 +311,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     }
     
     # Save complete model
-    model_path = 'saved_models/trained_model_ruxiao_density_info_penalty3_rho50_overfit1_epoch_400_q128_64_64_32_seed22.pth' 
+    model_path = 'saved_models/trained_model_ruxiao_rho50_overfit1_epoch_stage1_400_efficiency1_sparseNet_q128_64_64_32_with_log_seed22.pth' 
     torch.save({
         'model_state': model_state,
         'elbo_params': elbo_params,
@@ -322,7 +322,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     print(f"✓ Model saved to {model_path}")
     
     # Save training history as JSON for analysis
-    history_path = 'logs/training_history_ruxiao_density_info_penalty3_rho50_overfit1_epoch_400_q128_64_64_32_seed22.json'
+    history_path = 'logs/training_history_ruxiao_density_rho50_overfit1_epoch_stage1_400_efficiency1_sparseNet_q128_64_64_32_with_log_seed22.json'
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
     
@@ -368,7 +368,7 @@ def main():
         setup_project()
         
         # 2. Data preparation
-        data, loader = generate_or_load_data(regenerate=False)  # Set True to regenerate data
+        data, loader = generate_or_load_data(data_dir=CONFIG['data_dir'], regenerate=False)  # Set True to regenerate data
         
         # 3. Model creation
         models = create_models(data, L=3)  # L is history length
@@ -382,7 +382,7 @@ def main():
             loader=loader,
             inference_components=inference_components,
             train_end_time=15,  # Train on timesteps 0-15, test on 16-24
-            max_epochs=400
+            max_epochs=500
         )
         
         # 6. Save results
@@ -411,7 +411,3 @@ if __name__ == "__main__":
     # Run main pipeline
     exit_code = main()
     sys.exit(exit_code)
-
-import torch
-torch.set_num_threads(4)  # 设置CPU线程数
-print(f"CPU线程数设置为: {torch.get_num_threads()}")

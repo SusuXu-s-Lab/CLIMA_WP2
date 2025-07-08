@@ -161,6 +161,16 @@ def compute_p_ji_linear(link_df,
     mask = (link_mat == 0) | np.eye(N, dtype=bool)
     p_mat[mask] = 0.0
 
+
+    # print(f"=== compute_p_ji_linear 调试输出 (t={t}, k={k}) ===")
+    # print(f"线性得分范围: {scores.min():.6f} to {scores.max():.6f}")
+    # print(f"线性得分全局均值: {scores.mean():.6f}")
+    # print(f"线性得分全局中位数: {np.median(scores):.6f}")
+    # print(f"Sigmoid后概率范围: {p_mat.min():.2e} to {p_mat.max():.2e}")
+    # print(f"Sigmoid后概率全局均值: {p_mat.mean():.6f}")
+    # print(f"非零概率数量: {(p_mat > 1e-10).sum()} / {p_mat.size}")
+    # print(f"权重: {weights}")
+
     return pd.DataFrame(p_mat, index=homes, columns=homes)
 
 def update_link_matrix_one_step(similarity_df: pd.DataFrame,

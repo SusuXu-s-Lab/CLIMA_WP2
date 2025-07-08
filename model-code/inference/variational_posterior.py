@@ -46,7 +46,7 @@ class MeanFieldPosterior:
             if len(pairs_t) == 0:
                 continue
             
-            # Optimized: one single forward pass generates full 3×3 matrix
+            # Compute conditional probabilities π_ij(t | k) for all pairs at time t
             conditionals_t = self._compute_conditional_probabilities_timestep(
                 pairs_t, features, states, distances, network_data, t
             )
@@ -101,10 +101,11 @@ class MeanFieldPosterior:
             # State histories S_i(t:t-L+1), S_j(t:t-L+1)
             state_hist_i = get_full_state_history([i], states, t, self.L)
             state_hist_j = get_full_state_history([j], states, t, self.L)
+            #print(f'State history for {i} at t={t}: {state_hist_i}, {j} at t={t}: {state_hist_j}')
             
             batch_features_i.append(features[i])
             batch_features_j.append(features[j])
-            batch_state_hist_i.append(state_hist_i.squeeze(0))
+            batch_state_hist_i.append(state_hist_i.squeeze(0))  # Remove batch dimension
             batch_state_hist_j.append(state_hist_j.squeeze(0))
             batch_distances.append(distances[i, j])
         
@@ -116,19 +117,41 @@ class MeanFieldPosterior:
         distances_batch = torch.stack(batch_distances).unsqueeze(1)  # [num_pairs, 1]
         is_initial_batch = torch.full((num_pairs, 1), 1.0 if t == 0 else 0.0)  # [num_pairs, 1]
         
-        # Single network forward pass
-        logits_batch = self.network_type_nn(
-            features_i_batch, features_j_batch, state_hist_i_batch, state_hist_j_batch,
-            distances_batch, is_initial_batch
-        )  # [num_pairs, 3, 3]
+        # Call neural network 3 times, only changing prev_types_batch
+        for k_prev in range(3):
+            if t ==0:
+                # At t=0, we use a dummy previous type (k'=0)
+                prev_type_onehot = F.one_hot(torch.tensor(0), num_classes=3).float()
+            else:
+                # For t > 0, we use the previous type k' from the pairs
+                prev_type_onehot = F.one_hot(torch.tensor(k_prev), num_classes=3).float()
+            # Create batch of previous types (one-hot encoded)
+            # Shape: [num_pairs, 3] - same for all pairs in this batch
+            # Only this tensor changes between calls
+            prev_types_batch = prev_type_onehot.unsqueeze(0).repeat(num_pairs, 1)  # [num_pairs, 3]
+            
+            # Neural network call for previous type k'
+            # print(f'features_i_batch shape: {features_i_batch.shape}, '
+            #       f'features_j_batch shape: {features_j_batch.shape}, '
+            #       f'state_hist_i_batch shape: {state_hist_i_batch.shape}, '
+            #       f'state_hist_j_batch shape: {state_hist_j_batch.shape}, '
+            #       f'prev_types_batch shape: {prev_types_batch.shape}, '
+            #       f'distances_batch shape: {distances_batch.shape}, '
+            #       f'is_initial_batch shape: {is_initial_batch.shape}')
+            logits_batch = self.network_type_nn(
+                features_i_batch, features_j_batch, state_hist_i_batch, state_hist_j_batch,
+                prev_types_batch, distances_batch, is_initial_batch
+            )  # [num_pairs, 3]
+            
+            # Convert to probabilities and store
+            probs_batch = F.softmax(logits_batch, dim=1)  # [num_pairs, 3]
+            if t == 0:
+                for i in range(3):
+                    conditionals[:, i, :] = probs_batch
+                return conditionals  # At t=0, all k' are the same
 
-        conditionals = F.softmax(logits_batch, dim=2)  # softmax over last dim (k)
-
-        # At t=0 we replicate row 0 for all previous types to keep shape
-        if t == 0:
-            replicated = conditionals[:, 0, :].unsqueeze(1).repeat(1, 3, 1)
-            return replicated
-
+            conditionals[:, k_prev, :] = probs_batch  # Store π_ij(t | k') in row k'
+        
         return conditionals  # [num_pairs, 3, 3]
     
     def _compute_marginal_probabilities_timestep(self,

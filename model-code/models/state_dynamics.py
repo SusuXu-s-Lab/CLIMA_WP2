@@ -292,3 +292,91 @@ class StateTransition:
             link_repr = gumbel_samples.get(pair_key, torch.tensor([1.0, 0.0, 0.0]))
         
         return link_repr.unsqueeze(0)
+    
+
+    def compute_detailed_activation_probability(self, household_idx: torch.Tensor, decision_type: int,
+                                        features: torch.Tensor, states: torch.Tensor, distances: torch.Tensor,
+                                        network_data, gumbel_samples: Dict[str, torch.Tensor], time: int):
+        """
+        Detailed version that returns self-activation and neighbor-by-neighbor influence probabilities.
+        Only used for evaluation, not training.
+        """
+        batch_size = len(household_idx)
+        n_households = features.shape[0]
+        
+        detailed_results = []
+        
+        for batch_idx, hh_i in enumerate(household_idx):
+            hh_i_val = hh_i.item()
+            
+            # 1. SELF-ACTIVATION PROBABILITY
+            hh_features = features[hh_i_val].unsqueeze(0)
+            state_history_excluding_k = get_state_history_excluding_k(
+                [hh_i_val], decision_type, states, time, self.L
+            )
+            
+            decision_onehot = F.one_hot(torch.tensor(decision_type), num_classes=3).float().unsqueeze(0)
+            time_tensor = torch.full((1, 1), time, dtype=torch.float32)
+            
+            p_self = self.self_nn(hh_features, state_history_excluding_k, decision_onehot, time_tensor).squeeze().item()
+            
+            # 2. NEIGHBOR-BY-NEIGHBOR INFLUENCE PROBABILITIES
+            active_neighbors = []
+            neighbor_influences = []
+
+            for j in range(n_households):
+                if j == hh_i_val:
+                    continue
+                    
+                # First check if there's a connection
+                link_repr = self._get_link_representation(hh_i_val, j, network_data, gumbel_samples, time)
+                link_type = torch.argmax(link_repr).item()
+                
+                if link_type > 0:  # Has connection
+                    # Then check if neighbor is active
+                    if states[j, time, decision_type] == 1:  # Neighbor is active
+                        # Calculate influence probability
+                        active_neighbors.append(j)
+                        j_state_hist = get_full_state_history([j], states, time, self.L)
+                        i_state_hist = get_state_history_excluding_k([hh_i_val], decision_type, states, time, self.L)
+                        
+                        feat_i = features[hh_i_val].unsqueeze(0)
+                        feat_j = features[j].unsqueeze(0)
+                        dist = distances[hh_i_val, j].unsqueeze(0).unsqueeze(1)
+                        
+                        p_inf = self.influence_nn(link_repr, j_state_hist, i_state_hist, 
+                                                feat_i, feat_j, dist, decision_onehot, time_tensor).squeeze().item()
+                        
+                        neighbor_influences.append({
+                            'neighbor_id': j,
+                            'link_type': link_type,
+                            'link_probs': link_repr.squeeze().tolist(),
+                            'influence_prob': p_inf,
+                            'distance': distances[hh_i_val, j].item()
+                        })
+
+            
+            # 3. COMPUTE FINAL PROBABILITY STEP BY STEP
+            if len(neighbor_influences) == 0:
+                final_activation_prob = p_self
+                social_influence_term = 0.0
+            else:
+                neighbor_probs = [ni['influence_prob'] for ni in neighbor_influences]
+                product_term = torch.prod(torch.tensor([1 - p for p in neighbor_probs])).item()
+                social_influence_term = 1 - product_term
+                final_activation_prob = 1 - (1 - p_self) * product_term
+            
+            detailed_results.append({
+                'household_id': hh_i_val,
+                'decision_type': decision_type,
+                'timestep': time,
+                'self_activation_prob': p_self,
+                'active_neighbors': len(active_neighbors),
+                'neighbor_influences': neighbor_influences,
+                'social_influence_term': social_influence_term,
+                'final_activation_prob': final_activation_prob
+            })
+        
+        # Return both detailed results and the original activation probabilities
+        final_probs = torch.tensor([r['final_activation_prob'] for r in detailed_results])
+        return final_probs, detailed_results

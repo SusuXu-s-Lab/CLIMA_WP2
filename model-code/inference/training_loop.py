@@ -350,7 +350,7 @@ class NetworkStateTrainer:
         progress_bar = tqdm(range(max_epochs), desc="Training") if verbose else range(max_epochs)
 
         # Early stopping variables
-        best_elbo = float('-inf')
+        best_state_likelihood = float('-inf')
         epochs_no_improve = 0
 
         for _ in progress_bar:
@@ -364,18 +364,20 @@ class NetworkStateTrainer:
                     features, states, distances, network_data, ground_truth_network,
                     max_timestep, max_epochs, lambda_constraint
                 )
-
-            # Early stopping check
-            current_elbo = metrics['total_elbo']
-            if early_stopping:
-                if current_elbo > best_elbo + 1e-4:  # small tolerance
-                    best_elbo = current_elbo
+            
+            # Only start early stopping after epoch 300 (pure supervised phase)
+            if early_stopping and self.epoch >= 300:
+                current_state = metrics['state_likelihood']
+                
+                if current_state > best_state_likelihood + 1e-4:
+                    best_state_likelihood = current_state
                     epochs_no_improve = 0
                 else:
                     epochs_no_improve += 1
+                
                 if epochs_no_improve >= patience:
                     if verbose:
-                        print(f"Early stopping triggered at epoch {self.epoch} (best ELBO: {best_elbo:.2f})")
+                        print(f"Early stopping at epoch {self.epoch}: State likelihood stopped improving")
                     break
 
             if verbose and self.epoch % 1 == 0:

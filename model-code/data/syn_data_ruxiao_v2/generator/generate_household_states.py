@@ -77,7 +77,7 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
     """
     p_self_series=p_self_series/10
     p_ji_df=p_ji_df/10
-    state_cols = ['repair_state', 'vacancy_state', 'sales_state']
+    state_cols = ['vacancy_state', 'repair_state', 'sales_state']
     k_col      = state_cols[k]
 
     # --- 0. Slice current & next rows ---------------------------------------
