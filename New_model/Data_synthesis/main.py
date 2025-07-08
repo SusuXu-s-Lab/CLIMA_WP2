@@ -82,6 +82,11 @@ initial_links_df = generate_initial_links(similarity_df, interaction_df, alpha_0
 # ---- store link matrices for each t (t index aligned with "time") ----------
 link_snapshots = {0: initial_links_df.copy()}
 inter_t_list = []
+
+# ---- store p_self and p_ji statistics for each time step ----
+p_self_stats = []  # Will store records of {t, k, p_self_mean}
+p_ji_stats = []    # Will store records of {t, k, p_ji_nonzero_mean}
+
 # ---------------- main simulation loop (t = 0 … T-1) -----------------------
 for t in tqdm(range(T - 1)):              # we already have states at t, produce t+1
     print(f'--- sim step  {t}  →  {t+1} ---')
@@ -108,7 +113,33 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
             k=k,
             L=L
         )
-
+        
+        # ---- Record statistics for p_self and p_ji ----
+        # Record p_self mean
+        p_self_mean = p_self.mean()
+        p_self_stats.append({
+            'time_step': t,
+            'dimension': k,
+            'dimension_name': state_dims[k],
+            'p_self_mean': p_self_mean
+        })
+        
+        # Record p_ji non-zero mean
+        p_ji_values = p_ji.values
+        nonzero_mask = p_ji_values != 0
+        if nonzero_mask.any():
+            p_ji_nonzero_mean = p_ji_values[nonzero_mask].mean()
+        else:
+            p_ji_nonzero_mean = 0.0
+        
+        p_ji_stats.append({
+            'time_step': t,
+            'dimension': k,
+            'dimension_name': state_dims[k],
+            'p_ji_nonzero_mean': p_ji_nonzero_mean,
+            'nonzero_count': nonzero_mask.sum()
+        })
+        
         # --- update states (writes into time t+1 row) -----------------------
         house_states = update_full_states_one_step(
             house_df_with_features,
@@ -195,18 +226,6 @@ def block_links_per_timestep(df, p):
 links_long_df=links_long_df.rename(columns={'home_i': 'household_id_1','home_j': 'household_id_2','time': 'time_step'})
 house_df_with_features = house_df_with_features.rename(columns={'home': 'household_id', 'repair_state':'repair',
                                                                 'vacancy_state':'vacancy','sales_state':'sell'})
-# links_long_df=links_long_df[links_long_df['link_type'] !=0]
-# blocked_df = block_links_per_timestep(links_long_df, p=p_block)
-# house_df['latitude'], house_df['longitude'] = zip(*house_df['home'].map(pgh.decode))
-# house_df = house_df.rename(columns={'home': 'household_id'})
-# house_states.to_csv('sysnthetic_data/household_states.csv',index=False)
-# links_long_df.to_csv('sysnthetic_data/ground_truth_network.csv',index=False)
-# blocked_df.to_csv('sysnthetic_data/observed_network.csv',index=False)
-# house_df.to_csv('sysnthetic_data/household_loactions.csv',index=False)
-# house_df_with_features.to_csv('sysnthetic_data/household_features.csv', index=False)
-# np.save("inter_t_all.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
-# similarity_df.to_csv("similarity_df.csv")
-
 
 links_long_df=links_long_df[links_long_df['link_type'] !=0]
 blocked_df = block_links_per_timestep(links_long_df, p=p_block)
@@ -220,6 +239,13 @@ house_df_with_features.to_csv(folder_path+'household_features_raw.csv', index=Fa
 np.save(folder_path+"inter_t_all.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
 similarity_df.to_csv(folder_path+"similarity_df_raw.csv")
 
-print("house_states shape :", house_states.shape)
-print("links_long_df shape:", links_long_df.shape)
-print("links_long_df shape:", blocked_df.shape)
+# ---- Save p_self and p_ji statistics ----
+# Convert statistics lists to DataFrames
+p_self_df = pd.DataFrame(p_self_stats)
+p_ji_df = pd.DataFrame(p_ji_stats)
+
+# Save statistics to CSV files
+p_self_df.to_csv(folder_path+"p_self_statistics.csv", index=False)
+p_ji_df.to_csv(folder_path+"p_ji_statistics.csv", index=False)
+
+
