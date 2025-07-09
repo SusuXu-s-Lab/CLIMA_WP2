@@ -10,7 +10,7 @@ minx, miny, maxx, maxy = bbox
 # Read the filtered datasets
 sales_df = pd.read_csv("fl/fl/sales_data_with_recent_sale.csv")
 repair_df = pd.read_csv("fl/fl/repair_coords_mapped_to_sales.csv")  # This contains repair data
-pop_data = pd.read_csv("fl/fl/pop_subset_updated.csv")  # This contains household data
+pop_data = pd.read_csv("fl/fl/pop_subset_small_updated.csv")  # This contains household data
 
 sales_df = sales_df[
     (sales_df['lon'] >= minx) & (sales_df['lon'] <= maxx) &
@@ -105,6 +105,20 @@ merged_df = merged_df.drop('hhold', axis=1)
 
 # Sort by coordinates and timestep
 merged_df = merged_df.sort_values(['lon', 'lat', 'timestep']).reset_index(drop=True)
+
+print("Applying cumulative logic to sales and repair status...")
+# Apply cumulative logic: once sales/repair becomes 1, it stays 1 for all subsequent months
+for coord_group in merged_df.groupby(['lon', 'lat']):
+    coord_data = coord_group[1]
+    indices = coord_data.index
+    
+    # Apply cumulative effect for sales
+    sales_cumsum = coord_data['sales'].cumsum()
+    merged_df.loc[indices, 'sales'] = (sales_cumsum > 0).astype(int)
+    
+    # Apply cumulative effect for repair
+    repair_cumsum = coord_data['repair'].cumsum()
+    merged_df.loc[indices, 'repair'] = (repair_cumsum > 0).astype(int)
 
 # Save the merged dataset
 merged_df.to_csv("fl/fl/merged_sales_repair_data.csv", index=False)
