@@ -1,17 +1,29 @@
-Real_world household states data are in merged_sales_repair_data.csv, structure looks like:
+### Real-world household states data (`merged_sales_repair_data.csv`)
+Structure:
+```csv
 lon,lat,timestep,repair,sales,household_id
 -81.9757956841169,26.505221613977625,2022-07,0,0,12071001923h734
 -81.9757956841169,26.505221613977625,2022-07,0,0,12071001923h565
 -81.9757956841169,26.505221613977625,2022-07,0,0,12071001923h670
+```
 
-Real_world household features data are in small_house_features_with_household_id.csv, structure looks like:
+---
+
+### Real-world household features data (`small_house_features_with_household_id.csv`)
+Structure:
+```csv
 lon,lat,BUILDING,GISACRES,BEDROOMS,HEATEDAREA,household_id
 -81.96779944699392,26.512770178501004,0.0,0.5177,,,12071001922h711
 -81.97227953933714,26.51353130993817,0.0,0.3154,,,12071001923h1226
 -81.97379974936504,26.51424993754288,0.0,1.862,,,12071001923h598
 -81.97226003108665,26.51232124445063,0.0,0.2246,,,12071001923h594
+```
 
-Synthetic household social netowkr data are in household_social_network.csv, structure looks like:
+---
+
+### Synthetic household social network data (`household_social_network.csv`)
+Structure:
+```csv
 household_id_1,household_id_2,link_type,timestep
 12071001903h1016,12071001903h1040,2,2022-07
 12071001903h1016,12071001903h1643,2,2022-07
@@ -19,3 +31,4 @@ household_id_1,household_id_2,link_type,timestep
 12071001903h1040,12071001903h1643,2,2022-07
 12071001912h591,12071001923h615,2,2022-07
 12071001922h1188,12071001922h1214,2,2022-07
+```
