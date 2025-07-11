@@ -59,7 +59,7 @@ def compute_interaction_potential(house_df, state_df, t):
         weights = np.array([-9, -13.0, -15.0,     # f_ij part
                             -10.0, -7.0, -5.0,     # s_i part
                             -6.0, -5.0, -4.0,     # s_j part
-                            -20.0])/5     # dist_ij
+                            -20.0])/3     # dist_ij
     dot = np.tensordot(full_feat, weights, axes=([2], [0]))  # shape (N, N)
     # print("dot range:", dot.min(), dot.max(), dot.mean())
     interaction = 1 / (1 + np.exp(-dot))  # sigmoid
