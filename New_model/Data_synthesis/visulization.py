@@ -65,35 +65,6 @@ def visulize_links():
     plt.tight_layout()
     plt.show()
 
-    # # Additional: Network visualization for first few time steps
-    # fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    # axes = axes.flatten()
-    #
-    # for i, t in enumerate(sorted(df['time_step'].unique())[:4]):
-    #     subset = df[df['time_step'] == t]
-    #     G = nx.from_pandas_edgelist(subset, source='household_id_1', target='household_id_2',
-    #                                 edge_attr='link_type')
-    #
-    #     pos = nx.spring_layout(G, k=1, iterations=50)
-    #
-    #     # Draw edges with different colors for different link types
-    #     edge_colors = ['red' if G[u][v]['link_type'] == 1.0 else 'blue' for u, v in G.edges()]
-    #
-    #     nx.draw(G, pos, ax=axes[i], node_color='lightblue', node_size=300,
-    #             edge_color=edge_colors, with_labels=False, font_size=8, alpha=0.7)
-    #
-    #     axes[i].set_title(f'Network at Time Step {t}')
-    #     axes[i].set_aspect('equal')
-    #
-    # # Add legend for edge colors
-    # from matplotlib.lines import Line2D
-    # legend_elements = [Line2D([0], [0], color='red', lw=2, label='Link Type 1.0'),
-    #                    Line2D([0], [0], color='blue', lw=2, label='Link Type 2.0')]
-    # fig.legend(handles=legend_elements, loc='upper right')
-    #
-    # plt.suptitle('Network Evolution - First 4 Time Steps', fontsize=16)
-    # plt.tight_layout()
-    # plt.show()
 
     # Summary statistics
     print("\n=== SUMMARY STATISTICS ===")
@@ -113,7 +84,7 @@ def visulize_links():
     print(time_stats.head())
 
 def visulize_interpot_gif():
-    inter_t_all = np.load("sysnthetic_data/inter_t_all_raw.npy")
+    inter_t_all = np.load("sysnthetic_data/inter_t_all.npy")
     gif_frames = []
     temp_dir = "tmp_frames"
     os.makedirs(temp_dir, exist_ok=True)
