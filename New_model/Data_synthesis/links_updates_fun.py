@@ -134,9 +134,9 @@ def compute_p_ji_linear(link_df,
     link_mat = link_df.values  # (N,N)
     link_feat = link_mat[..., None]  # (N,N,1)
 
-    hist_src = np.broadcast_to(hist_flat[:, None, :],  # src=j，行向量
+    hist_src = np.broadcast_to(hist_flat[:, None, :],  # src=j，
                                (N, N, 2 * L))  # => (N,N,2L)
-    hist_tgt = np.broadcast_to(hist_flat[None, :, :],  # tgt=i，列向量
+    hist_tgt = np.broadcast_to(hist_flat[None, :, :],  # tgt=i，
                                (N, N, 2 * L))  # => (N,N,2L)
     time_feat = np.full((N, N, 1), t)   # (N,N,1)
 
@@ -169,7 +169,7 @@ def compute_p_ji_linear(link_df,
     w_link   = np.array([5])
     w_dist   = np.array([-25])
     w_time = np.array([-20.0])
-    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])    # (3+4L+2,)
+    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])*2    # (3+4L+2,)
     scores = np.tensordot(feat_all_norm, weights, axes=([-1], [0]))             # (N,N)
     p_mat  = 1.0 / (1.0 + np.exp(-scores))                                 # sigmoid
 
