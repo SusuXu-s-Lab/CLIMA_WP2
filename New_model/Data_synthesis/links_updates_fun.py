@@ -84,7 +84,7 @@ def compute_p_self(house_df, full_state_df, t, k, L=3):
     w_static = np.array([-5, -7, -9])             # income, age, race  # Has to be negative, otherwise p_ij will be bigger than 0.5 at first few time step
 
     w_hist   = np.full(2 * L, -9)                  # L steps of 2 non-k dims
-    w_time = np.array([-4])
+    w_time = np.array([-2])
     weights  = np.concatenate([w_static, w_hist, w_time])
     
     assert weights.shape[0] == all_feat.shape[1], "Shape mismatch in feature × weight"
@@ -164,8 +164,8 @@ def compute_p_ji_linear(link_df,
     
 
     # ---------- (4) weighted linear score ----------
-    w_demo   = np.array([-17.0, -18, -17])
-    w_hist   = np.full(2 * L, -8.0)                # applies to both src & tgt
+    w_demo   = np.array([-17.0, -20, -17])
+    w_hist   = np.full(2 * L, -14.0)                # applies to both src & tgt
     w_link   = np.array([5])
     w_dist   = np.array([-25])
     w_time = np.array([-20.0])

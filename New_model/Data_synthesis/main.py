@@ -11,8 +11,9 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
+
 # Hyper parameter definition
-alpha=0.2
+alpha=0.5
 beta=0.0001
 gamma=0.6
 L=1
@@ -196,7 +197,8 @@ house_states = house_states.sort_values(['time', 'home']).reset_index(drop=True)
 # ---------------------------------------------------------------------------
 
 print("Simulation finished.")
-
+count_ones = (initial_links_df == 1).sum().sum()
+print(f"number of bonding links: {count_ones/2}")
 '''
 Save Results
 '''
