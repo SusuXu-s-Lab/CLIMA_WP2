@@ -722,7 +722,8 @@ class ELBOComputation:
             if expected_hidden_bonding_t > 0.1:
                 bonding_relative_error = torch.abs(discrete_bonding_t - expected_hidden_bonding_t) / expected_hidden_bonding_t
                 bonding_penalty_t = balance_factor * bonding_relative_error
-            bonding_penalty_t = 3 * torch.clamp(bonding_penalty_t, 0.0, 20.0) / 20
+            # bonding_penalty_t = 3 * torch.clamp(bonding_penalty_t, 0.0, 20.0) / 20
+            bonding_penalty_t = 3 * torch.clamp(bonding_penalty_t, 0.0, 30.0) / 30
             
             if expected_hidden_bridging_t > 0.1:
                 bridging_ratio = (discrete_bridging_t + 1) / (expected_hidden_bridging_t + 1)
@@ -730,7 +731,9 @@ class ELBOComputation:
             bridging_penalty_t = torch.clamp(bridging_penalty_t, 0.0, 3.0)
             
             # Combine penalties for current timestep
-            timestep_penalty = 0.5 * bonding_penalty_t + 0.5 * bridging_penalty_t
+            # timestep_penalty = 0.5 * bonding_penalty_t + 0.5 * bridging_penalty_t
+            timestep_penalty = 0.7 * bonding_penalty_t + 0.3 * bridging_penalty_t
+
             total_penalty += timestep_penalty
             
             # Accumulate global statistics (optimized tensor handling)
