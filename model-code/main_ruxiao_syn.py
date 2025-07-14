@@ -59,7 +59,7 @@ def apply_xavier_init(trainer):
 
 
 CONFIG = {
-    'data_dir': 'data/syn_data_ruxiao_v2/syn_50house_200bri_20bond', # Directory for synthetic data
+    'data_dir': 'data/syn_50house_300bri_70bond_alpha0.5_slowgrow', # Directory for synthetic data
     'models_dir': 'saved_models',
     'logs_dir': 'logs'
 }
@@ -75,7 +75,7 @@ def setup_project():
     print(f"✓ Working directory: {project_root}")
     print(f"✓ Data directory: {CONFIG['data_dir']}")
 
-def generate_or_load_data(data_dir: str = 'data/syn_data_ruxiao_v2', regenerate: bool = False) -> Dict[str, Any]:
+def generate_or_load_data(data_dir: str = 'data/syn_50house_300bri_70bond_alpha0.5', regenerate: bool = False) -> Dict[str, Any]:
     """Generate synthetic data or load existing data."""
     
     print("=== Data Preparation ===")
