@@ -413,6 +413,417 @@ class ELBOComputation:
             
             return total_likelihood
 
+    def compute_prior_likelihood_batch_optimized(self,
+                                    conditional_probs: Dict[str, torch.Tensor],
+                                    marginal_probs: Dict[str, torch.Tensor],
+                                    features: torch.Tensor,
+                                    states: torch.Tensor,
+                                    distances: torch.Tensor,
+                                    node_batch: torch.Tensor,
+                                    network_data,
+                                    max_timestep: int) -> torch.Tensor:
+            """
+            OPTIMIZED: Prior likelihood for COMPLETE graph with batch processing.
+            
+            Key optimizations:
+            1. Pre-compute all batch pairs once
+            2. Vectorized neural network calls
+            3. Batch feature extraction
+            4. Reduced repeated computations
+            """
+            total_likelihood = 0.0
+            batch_nodes_set = set(node_batch.tolist())
+            
+            # PRE-COMPUTE: Get ALL batch pairs for all timesteps at once
+            def get_all_batch_pairs_optimized():
+                """Pre-compute all pairs involving batch nodes for efficiency"""
+                all_pairs = []
+                n_nodes = features.shape[0]
+                
+                for i in range(n_nodes):
+                    for j in range(i + 1, n_nodes):
+                        if i in batch_nodes_set or j in batch_nodes_set:
+                            all_pairs.append((i, j))
+                
+                return all_pairs
+            
+            all_batch_pairs = get_all_batch_pairs_optimized()
+            
+            if len(all_batch_pairs) == 0:
+                return torch.tensor(0.0)
+            
+            # OPTIMIZATION 1: Batch process initial probabilities (t=0)
+            initial_pairs = []
+            initial_marginals = []
+            initial_observed_types = []
+            
+            for i, j in all_batch_pairs:
+                if network_data.is_observed(i, j, 0):
+                    observed_type = network_data.get_link_type(i, j, 0)
+                    initial_observed_types.append((i, j, observed_type))
+                else:
+                    pair_key = f"{i}_{j}_0"
+                    if pair_key in marginal_probs:
+                        marginal_tensor = marginal_probs[pair_key]
+                        initial_pairs.append((i, j))
+                        initial_marginals.append(marginal_tensor)
+            
+            # Batch compute initial probabilities for hidden pairs
+            if initial_pairs:
+                batch_size = len(initial_pairs)
+                i_indices = [pair[0] for pair in initial_pairs]
+                j_indices = [pair[1] for pair in initial_pairs]
+                
+                # Ensure all marginals are 3-dimensional
+                validated_marginals = []
+                for marginal in initial_marginals:
+                    if marginal.dim() == 1 and marginal.shape[0] == 3:
+                        validated_marginals.append(marginal)
+                    else:
+                        continue  # Skip invalid marginals
+                
+                if len(validated_marginals) != len(initial_pairs):
+                    # Update indices to match validated marginals
+                    initial_pairs = initial_pairs[:len(validated_marginals)]
+                    i_indices = i_indices[:len(validated_marginals)]
+                    j_indices = j_indices[:len(validated_marginals)]
+                
+                if len(validated_marginals) > 0:
+                    # Stack marginals
+                    marginals_batch = torch.stack(validated_marginals)  # [batch_size, 3]
+                
+                    # Vectorized feature extraction
+                    feat_i_batch = features[i_indices]  # [batch_size, feature_dim]
+                    feat_j_batch = features[j_indices]  # [batch_size, feature_dim]
+                    dist_batch = distances[i_indices, j_indices].unsqueeze(1)  # [batch_size, 1]
+                    
+                    # Single batch call to network evolution model
+                    init_probs_batch = self.network_evolution.initial_probabilities(
+                        feat_i_batch, feat_j_batch, dist_batch
+                    )  # [batch_size, 3] or [batch_size, 3, 1]
+                    
+                    # Fix shape mismatch: squeeze any trailing dimensions
+                    init_probs_batch = init_probs_batch.squeeze(-1)  # Ensure [batch_size, 3]
+                    
+                    # Vectorized log probability computation
+                    log_probs_batch = torch.sum(marginals_batch * torch.log(init_probs_batch + 1e-8), dim=1)
+                    total_likelihood += log_probs_batch.sum()
+            
+            # Handle observed pairs at t=0
+            for i, j, observed_type in initial_observed_types:
+                π_ij = F.one_hot(torch.tensor(observed_type), num_classes=3).float()
+                feat_i = features[i].unsqueeze(0)
+                feat_j = features[j].unsqueeze(0)
+                dist = distances[i, j].unsqueeze(0).unsqueeze(1)
+                
+                init_probs = self.network_evolution.initial_probabilities(feat_i, feat_j, dist)
+                log_prob = torch.sum(π_ij * torch.log(init_probs.squeeze(0) + 1e-8))
+                total_likelihood += log_prob
+            
+            # OPTIMIZATION 2: Batch process temporal transitions
+            for t in range(1, max_timestep + 1):
+                # Group pairs by case type for batch processing
+                hidden_to_hidden_pairs = []
+                hidden_to_obs_pairs = []
+                obs_to_hidden_pairs = []
+                obs_to_obs_pairs = []
+                
+                for i, j in all_batch_pairs:
+                    current_observed = network_data.is_observed(i, j, t)
+                    prev_observed = network_data.is_observed(i, j, t-1)
+                    
+                    if not current_observed and not prev_observed:
+                        hidden_to_hidden_pairs.append((i, j))
+                    elif current_observed and not prev_observed:
+                        hidden_to_obs_pairs.append((i, j))
+                    elif not current_observed and prev_observed:
+                        obs_to_hidden_pairs.append((i, j))
+                    else:
+                        obs_to_obs_pairs.append((i, j))
+                
+                # Process each case type in batches
+                total_likelihood += self._process_hidden_to_hidden_batch(
+                    hidden_to_hidden_pairs, conditional_probs, marginal_probs, 
+                    features, states, distances, t
+                )
+                
+                total_likelihood += self._process_hidden_to_obs_batch(
+                    hidden_to_obs_pairs, marginal_probs, features, states, distances, 
+                    network_data, t
+                )
+                
+                total_likelihood += self._process_obs_to_hidden_batch(
+                    obs_to_hidden_pairs, marginal_probs, features, states, distances, 
+                    network_data, t
+                )
+                
+                total_likelihood += self._process_obs_to_obs_batch(
+                    obs_to_obs_pairs, features, states, distances, network_data, t
+                )
+            
+            return total_likelihood
+    
+    def _process_hidden_to_hidden_batch(self, pairs, conditional_probs, marginal_probs, 
+                                       features, states, distances, t):
+        """Batch process hidden→hidden transitions"""
+        if not pairs:
+            return torch.tensor(0.0)
+        
+        total_likelihood = 0.0
+        valid_pairs = []
+        valid_conditionals = []
+        valid_prev_marginals = []
+        
+        # Filter valid pairs
+        for i, j in pairs:
+            pair_key_current = f"{i}_{j}_{t}"
+            pair_key_prev = f"{i}_{j}_{t-1}"
+            
+            if (pair_key_current in conditional_probs and 
+                pair_key_current in marginal_probs and 
+                pair_key_prev in marginal_probs):
+                
+                valid_pairs.append((i, j))
+                valid_conditionals.append(conditional_probs[pair_key_current])
+                valid_prev_marginals.append(marginal_probs[pair_key_prev])
+        
+        if not valid_pairs:
+            return torch.tensor(0.0)
+        
+        # Batch compute transition probabilities
+        batch_size = len(valid_pairs)
+        i_indices = [pair[0] for pair in valid_pairs]
+        j_indices = [pair[1] for pair in valid_pairs]
+        
+        feat_i_batch = features[i_indices]
+        feat_j_batch = features[j_indices]
+        state_i_batch = states[i_indices, t]
+        state_j_batch = states[j_indices, t]
+        dist_batch = distances[i_indices, j_indices].unsqueeze(1)
+        
+        # Process in chunks to manage memory
+        chunk_size = 32  # Adjust based on available memory
+        for chunk_start in range(0, batch_size, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, batch_size)
+            
+            chunk_prev_marginals = valid_prev_marginals[chunk_start:chunk_end]
+            chunk_conditionals = valid_conditionals[chunk_start:chunk_end]
+            
+            # Validate marginal shapes
+            validated_chunk_marginals = []
+            for marginal in chunk_prev_marginals:
+                if marginal.dim() == 1 and marginal.shape[0] == 3:
+                    validated_chunk_marginals.append(marginal)
+                else:
+                    continue
+            
+            if len(validated_chunk_marginals) == 0:
+                continue
+                
+            # Expand previous marginals for transition computation
+            π_prev_batch = torch.stack(validated_chunk_marginals).unsqueeze(1)  # [chunk_size, 1, 3]
+            
+            # Adjust batch indices to match validated marginals
+            valid_chunk_size = len(validated_chunk_marginals)
+            
+            trans_probs_batch = self.network_evolution.transition_probabilities(
+                π_prev_batch, 
+                feat_i_batch[chunk_start:chunk_start + valid_chunk_size], 
+                feat_j_batch[chunk_start:chunk_start + valid_chunk_size],
+                state_i_batch[chunk_start:chunk_start + valid_chunk_size], 
+                state_j_batch[chunk_start:chunk_start + valid_chunk_size], 
+                dist_batch[chunk_start:chunk_start + valid_chunk_size]
+            )  # [valid_chunk_size, 3, 3]
+            
+            # Vectorized complex formula computation
+            for idx in range(valid_chunk_size):
+                π_prev = validated_chunk_marginals[idx]  # [3]
+                π_conditional = chunk_conditionals[idx]  # [3, 3]
+                trans_probs = trans_probs_batch[idx]  # [3, 3]
+                
+                # Vectorized computation of double sum
+                prob_contrib = torch.sum(
+                    π_prev.unsqueeze(1) * π_conditional * torch.log(trans_probs + 1e-8)
+                )
+                total_likelihood += prob_contrib
+        
+        return total_likelihood
+    
+    def _process_hidden_to_obs_batch(self, pairs, marginal_probs, features, states, 
+                                    distances, network_data, t):
+        """Batch process hidden→observed transitions"""
+        if not pairs:
+            return torch.tensor(0.0)
+        
+        # Group by observed type for more efficient batch processing
+        type_groups = {0: [], 1: [], 2: []}
+        
+        for i, j in pairs:
+            pair_key_prev = f"{i}_{j}_{t-1}"
+            if pair_key_prev in marginal_probs:
+                k_obs = network_data.get_link_type(i, j, t)
+                # Ensure k_obs is within valid range
+                if k_obs in {0, 1, 2}:
+                    type_groups[k_obs].append((i, j, marginal_probs[pair_key_prev]))
+                else:
+                    continue  # Skip invalid link types
+        
+        total_likelihood = 0.0
+        
+        for k_obs, group_pairs in type_groups.items():
+            if not group_pairs:
+                continue
+            
+            batch_size = len(group_pairs)
+            i_indices = [i for i, j, _ in group_pairs]
+            j_indices = [j for i, j, _ in group_pairs] 
+            prev_marginals = [marginal for i, j, marginal in group_pairs]
+            
+            # Batch feature extraction
+            feat_i_batch = features[i_indices]
+            feat_j_batch = features[j_indices]
+            state_i_batch = states[i_indices, t]
+            state_j_batch = states[j_indices, t]
+            dist_batch = distances[i_indices, j_indices].unsqueeze(1)
+            
+            # Compute transition probabilities for all 3 previous types
+            prev_types_all = torch.eye(3).unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, 3, 3]
+            
+            trans_probs = self.network_evolution.transition_probabilities(
+                prev_types_all.reshape(-1, 3),  # [batch_size*3, 3]
+                feat_i_batch.repeat(3, 1),   # [batch_size*3, feature_dim]
+                feat_j_batch.repeat(3, 1),   # [batch_size*3, feature_dim]
+                state_i_batch.repeat(3, 1),  # [batch_size*3, 3]
+                state_j_batch.repeat(3, 1),  # [batch_size*3, 3]
+                dist_batch.repeat(3, 1)      # [batch_size*3, 1]
+            ).reshape(batch_size, 3, 3, 3)      # [batch_size, 3, 3, 3]
+            
+            # Extract relevant transitions and compute likelihood
+            for idx, (π_prev) in enumerate(prev_marginals):
+                # Validate π_prev shape
+                if π_prev.dim() != 1 or π_prev.shape[0] != 3:
+                    continue
+                    
+                transition_to_obs = trans_probs[idx, torch.arange(3), torch.arange(3), k_obs]
+                log_probs = torch.log(transition_to_obs + 1e-8)
+                prob_contrib = torch.sum(π_prev * log_probs)
+                total_likelihood += prob_contrib
+        
+        return total_likelihood
+    
+    def _process_obs_to_hidden_batch(self, pairs, marginal_probs, features, states, 
+                                    distances, network_data, t):
+        """Batch process observed→hidden transitions"""
+        if not pairs:
+            return torch.tensor(0.0)
+        
+        # Group by previous observed type
+        type_groups = {0: [], 1: [], 2: []}
+        
+        for i, j in pairs:
+            pair_key_current = f"{i}_{j}_{t}"
+            if pair_key_current in marginal_probs:
+                k_prev_obs = network_data.get_link_type(i, j, t-1)
+                # Ensure k_prev_obs is within valid range
+                if k_prev_obs in {0, 1, 2}:
+                    type_groups[k_prev_obs].append((i, j, marginal_probs[pair_key_current]))
+                else:
+                    continue  # Skip invalid link types
+        
+        total_likelihood = 0.0
+        
+        for k_prev_obs, group_pairs in type_groups.items():
+            if not group_pairs:
+                continue
+            
+            batch_size = len(group_pairs)
+            i_indices = [i for i, j, _ in group_pairs]
+            j_indices = [j for i, j, _ in group_pairs]
+            current_marginals = [marginal for i, j, marginal in group_pairs]
+            
+            # Batch feature extraction
+            feat_i_batch = features[i_indices]
+            feat_j_batch = features[j_indices]
+            state_i_batch = states[i_indices, t]
+            state_j_batch = states[j_indices, t]
+            dist_batch = distances[i_indices, j_indices].unsqueeze(1)
+            
+            # Create previous type tensor for batch
+            prev_onehot = F.one_hot(torch.tensor(k_prev_obs), num_classes=3).float()
+            prev_onehot_batch = prev_onehot.unsqueeze(0).expand(batch_size, -1)
+            
+            # Batch compute transition probabilities
+            trans_probs = self.network_evolution.transition_probabilities(
+                prev_onehot_batch, feat_i_batch, feat_j_batch, 
+                state_i_batch, state_j_batch, dist_batch
+            )  # [batch_size, 3, 3]
+            
+            # Compute likelihood for each pair
+            for idx, π_current in enumerate(current_marginals):
+                # Validate π_current shape
+                if π_current.dim() != 1 or π_current.shape[0] != 3:
+                    continue
+                    
+                for k_curr in range(3):
+                    trans_prob = trans_probs[idx, k_prev_obs, k_curr]
+                    prob_contrib = π_current[k_curr] * torch.log(trans_prob + 1e-8)
+                    total_likelihood += prob_contrib
+        
+        return total_likelihood
+    
+    def _process_obs_to_obs_batch(self, pairs, features, states, distances, network_data, t):
+        """Batch process observed→observed transitions"""
+        if not pairs:
+            return torch.tensor(0.0)
+        
+        # Group by transition type for batch processing
+        transition_groups = {}
+        
+        for i, j in pairs:
+            k_prev_obs = network_data.get_link_type(i, j, t-1)
+            k_curr_obs = network_data.get_link_type(i, j, t)
+            
+            # Ensure both link types are within valid range
+            if k_prev_obs not in {0, 1, 2} or k_curr_obs not in {0, 1, 2}:
+                continue  # Skip invalid link types
+                
+            transition_key = (k_prev_obs, k_curr_obs)
+            
+            if transition_key not in transition_groups:
+                transition_groups[transition_key] = []
+            transition_groups[transition_key].append((i, j))
+        
+        total_likelihood = 0.0
+        
+        for (k_prev_obs, k_curr_obs), group_pairs in transition_groups.items():
+            batch_size = len(group_pairs)
+            i_indices = [pair[0] for pair in group_pairs]
+            j_indices = [pair[1] for pair in group_pairs]
+            
+            # Batch feature extraction
+            feat_i_batch = features[i_indices]
+            feat_j_batch = features[j_indices]
+            state_i_batch = states[i_indices, t]
+            state_j_batch = states[j_indices, t]
+            dist_batch = distances[i_indices, j_indices].unsqueeze(1)
+            
+            # Create previous type tensor for batch
+            prev_onehot = F.one_hot(torch.tensor(k_prev_obs), num_classes=3).float()
+            prev_onehot_batch = prev_onehot.unsqueeze(0).expand(batch_size, -1)
+            
+            # Batch compute transition probabilities
+            trans_probs = self.network_evolution.transition_probabilities(
+                prev_onehot_batch, feat_i_batch, feat_j_batch, 
+                state_i_batch, state_j_batch, dist_batch
+            )  # [batch_size, 3, 3]
+            
+            # Extract specific transition probabilities and sum log probabilities
+            specific_trans_probs = trans_probs[:, k_prev_obs, k_curr_obs]  # [batch_size]
+            log_probs = torch.log(specific_trans_probs + 1e-8)
+            total_likelihood += log_probs.sum()
+        
+        return total_likelihood
+
 
     
     def compute_posterior_entropy_batch(self, 
@@ -472,6 +883,103 @@ class ELBOComputation:
         # NORMALIZATION ADDED: We need to get total_households from somewhere
         # We'll add it to the method signature in the main compute_elbo_batch method
         return total_entropy  # Will be normalized in the caller
+
+    def compute_posterior_entropy_batch_optimized(self,
+                                                conditional_probs: Dict[str, torch.Tensor],
+                                                marginal_probs: Dict[str, torch.Tensor],
+                                                network_data,
+                                                node_batch: torch.Tensor,
+                                                max_timestep: int) -> torch.Tensor:
+        """
+        OPTIMIZED: Posterior entropy computation with batched processing and reduced string operations.
+        
+        Optimization strategies:
+        1. Pre-index all relevant probability tensors by timestep
+        2. Batch vectorized computations where possible
+        3. Reduce string concatenation and dictionary lookups
+        4. Memory-efficient chunked processing
+        """
+        total_entropy = 0.0
+        batch_nodes_set = set(node_batch.tolist())
+        
+        # Pre-processing: Organize data by timestep to reduce repeated lookups
+        timestep_data = {}
+        for t in range(max_timestep + 1):
+            timestep_data[t] = {
+                'hidden_pairs': [],
+                'marginal_tensors': [],
+                'conditional_tensors': [],
+                'prev_observed_types': []
+            }
+        
+        # Batch collect data - single pass through marginal_probs
+        for pair_key, marginal_prob in marginal_probs.items():
+            parts = pair_key.split('_')
+            if len(parts) == 3:
+                i, j, t = int(parts[0]), int(parts[1]), int(parts[2])
+                
+                # Only process pairs involving batch nodes
+                if i in batch_nodes_set or j in batch_nodes_set:
+                    if t < len(timestep_data):
+                        timestep_data[t]['hidden_pairs'].append((i, j))
+                        timestep_data[t]['marginal_tensors'].append(marginal_prob)
+        
+        # Batch compute initial entropy (t=0)
+        if timestep_data[0]['marginal_tensors']:
+            marginal_batch = torch.stack(timestep_data[0]['marginal_tensors'])  # [N, 3]
+            
+            # Vectorized entropy computation: H = -Σ p * log(p)
+            log_marginals = torch.log(marginal_batch + 1e-8)
+            entropy_batch = -torch.sum(marginal_batch * log_marginals, dim=1)
+            total_entropy += entropy_batch.sum()
+        
+        # Batch compute temporal entropy (t>=1)
+        for t in range(1, max_timestep + 1):
+            # Collect conditional probabilities for current timestep
+            current_conditionals = []
+            prev_marginals = []
+            obs_conditionals = []
+            
+            for i, j in timestep_data[t]['hidden_pairs']:
+                pair_key_current = f"{i}_{j}_{t}"
+                pair_key_prev = f"{i}_{j}_{t-1}"
+                
+                if pair_key_current in conditional_probs:
+                    π_conditional = conditional_probs[pair_key_current]
+                    
+                    if network_data.is_observed(i, j, t-1):
+                        # Previous state observed case
+                        prev_type = network_data.get_link_type(i, j, t-1)
+                        obs_conditionals.append(π_conditional[prev_type, :])
+                    elif pair_key_prev in marginal_probs:
+                        # Previous state hidden case
+                        current_conditionals.append(π_conditional)
+                        prev_marginals.append(marginal_probs[pair_key_prev])
+            
+            # Batch process observed conditional entropy
+            if obs_conditionals:
+                obs_batch = torch.stack(obs_conditionals)  # [N, 3]
+                log_obs = torch.log(obs_batch + 1e-8)
+                entropy_obs = -torch.sum(obs_batch * log_obs, dim=1)
+                total_entropy += entropy_obs.sum()
+            
+            # Batch process hidden conditional entropy (still requires loop but vectorized inner computation)
+            if current_conditionals and prev_marginals:
+                for π_conditional, π_prev in zip(current_conditionals, prev_marginals):
+                    # Vectorized double summation: H = -Σ Σ [π̄(t-1)[k'] × π(t|k')[k]] × log π(t|k')[k]
+                    π_prev_expanded = π_prev.unsqueeze(1)  # [3, 1]
+                    joint_probs = π_prev_expanded * π_conditional  # [3, 3]
+                    
+                    # Safe logarithm computation
+                    log_conditional = torch.log(π_conditional + 1e-8)
+                    valid_mask = joint_probs > 1e-8
+                    
+                    entropy_contribution = -torch.sum(
+                        joint_probs * log_conditional * valid_mask.float()
+                    )
+                    total_entropy += entropy_contribution
+        
+        return total_entropy
     
     def compute_confidence_regularization(self, marginal_probs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """
@@ -843,6 +1351,7 @@ class ELBOComputation:
         """
         Complete ELBO computation with per-example normalization and component weighting.
         """
+        import time
 
         # def get_dynamic_weights(epoch):
         #     if epoch < 30:  
@@ -939,7 +1448,7 @@ class ELBOComputation:
         timing_results['observation_likelihood'] = time.time() - start_time
 
         start_time = time.time()
-        prior_likelihood_raw = self.compute_prior_likelihood_batch(
+        prior_likelihood_raw = self.compute_prior_likelihood_batch_optimized(
             conditional_probs, marginal_probs, features, states, distances, 
             node_batch, network_data, max_timestep
         )
@@ -947,7 +1456,7 @@ class ELBOComputation:
 
         # Compute other components
         start_time = time.time()
-        posterior_entropy_raw = self.compute_posterior_entropy_batch(
+        posterior_entropy_raw = self.compute_posterior_entropy_batch_optimized(
             conditional_probs, marginal_probs, network_data, node_batch, max_timestep
         )
         timing_results['posterior_entropy'] = time.time() - start_time
@@ -977,15 +1486,19 @@ class ELBOComputation:
 
         # density_bonus_raw = self.compute_connection_density_bonus(marginal_probs)
 
-        print(f"Raw values - State: {state_likelihood_raw.item():.2f}, "
-            f"Obs: {observation_likelihood_raw.item():.2f}, "
-            f"Prior: {prior_likelihood_raw.item():.2f}, "
-            f"Entropy: {posterior_entropy_raw.item():.2f},"
-            f" Sparsity: {confidence_reg_raw.item():.2f}, "
-            f"Constraint: {constraint_penalty_raw.item():.2f}, "
-            f"Timestep Density Penalty: {timestep_density_penalty.item():.2f}, "
-            f"Info Propagation Penalty: {info_propagation_penalty.item():.2f},")
-            #f"Density Bonus: {density_bonus_raw.item():.2f}")
+        # Helper function to safely extract numeric values
+        def safe_item(x):
+            return x.item() if hasattr(x, 'item') else x
+        
+        print(f"Raw values - State: {safe_item(state_likelihood_raw):.2f}, "
+            f"Obs: {safe_item(observation_likelihood_raw):.2f}, "
+            f"Prior: {safe_item(prior_likelihood_raw):.2f}, "
+            f"Entropy: {safe_item(posterior_entropy_raw):.2f},"
+            f" Sparsity: {safe_item(confidence_reg_raw):.2f}, "
+            f"Constraint: {safe_item(constraint_penalty_raw):.2f}, "
+            f"Timestep Density Penalty: {safe_item(timestep_density_penalty):.2f}, "
+            f"Info Propagation Penalty: {safe_item(info_propagation_penalty):.2f},")
+            #f"Density Bonus: {safe_item(density_bonus_raw):.2f}")
 
         # Calculate actual counts for proper normalization
         # total_state_predictions =  max_timestep * 3  # 3 decision types
@@ -1026,16 +1539,16 @@ class ELBOComputation:
                     weighted_prior_likelihood + weighted_posterior_entropy - weighted_confidence_reg -
                     weighted_constraint_penalty - weighted_density_penalty - weighted_info_propagation)
 
-        print(f"Weighted components - State: {weighted_state_likelihood.item():.4f}, "
-            f"Obs: {weighted_observation_likelihood.item():.4f}, "
-            f"Prior: {weighted_prior_likelihood.item():.4f}, "
-            f"Entropy: {weighted_posterior_entropy.item():.4f}")
-        print(f"Sparsity: {weighted_confidence_reg.item():.4f}, "
-            f"Constraint: {weighted_constraint_penalty.item():.4f}, "
-            f"Timestep Density Penalty: {weighted_density_penalty.item():.4f}, "
-            f"Info Propagation: {weighted_info_propagation.item():.4f}")
-            # f"Density Bonus: {weighted_density_bonus.item():.4f}")
-        print(f"Total weighted ELBO: {total_elbo.item():.4f}")
+        print(f"Weighted components - State: {safe_item(weighted_state_likelihood):.4f}, "
+            f"Obs: {safe_item(weighted_observation_likelihood):.4f}, "
+            f"Prior: {safe_item(weighted_prior_likelihood):.4f}, "
+            f"Entropy: {safe_item(weighted_posterior_entropy):.4f}")
+        print(f"Sparsity: {safe_item(weighted_confidence_reg):.4f}, "
+            f"Constraint: {safe_item(weighted_constraint_penalty):.4f}, "
+            f"Timestep Density Penalty: {safe_item(weighted_density_penalty):.4f}, "
+            f"Info Propagation: {safe_item(weighted_info_propagation):.4f}")
+            # f"Density Bonus: {safe_item(weighted_density_bonus):.4f}")
+        print(f"Total weighted ELBO: {safe_item(total_elbo):.4f}")
 
         print("\n=== FUNCTION TIMING ANALYSIS ===")
         total_time = sum(timing_results.values())
