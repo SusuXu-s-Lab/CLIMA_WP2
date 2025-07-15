@@ -4,6 +4,7 @@ Simple model loading and evaluation script.
 
 from pathlib import Path
 import sys
+import pdb
 project_root = Path(__file__).parent
 sys.path.append(str(project_root))
 
@@ -18,7 +19,9 @@ from data import DataLoader
 from models import NetworkTypeNN, SelfActivationNN, InfluenceNN, InteractionFormationNN
 from models import NetworkEvolution, StateTransition
 from inference import MeanFieldPosterior, GumbelSoftmaxSampler, ELBOComputation, NetworkStateTrainer
-from evaluation.evaluation_corrected import evaluate_model_corrected, print_evaluation_results
+from evaluation.evaluation_2 import evaluate_model_corrected, print_evaluation_results
+import warnings
+warnings.filterwarnings("ignore")
 
 def load_model(model_path, device='cpu'):
     """Load trained model from checkpoint."""
@@ -73,25 +76,26 @@ def main():
         'observed_network_community_one_hot.csv',
         'ground_truth_network_community_one_hot.csv'
     ]    
-    loader = DataLoader(project_root/'data/syn_data_ruxiao_v2', file_list=data_files)
+    data_path='data/syn_50house_300bri_70bond_alpha0.5_fastgrow'
+    loader = DataLoader(data_path, file_list=data_files)
     # loader = DataLoader(project_root/'data/syn_data_v3')
     data = loader.load_data()
     train_data, test_data = loader.train_test_split(data, train_end_time=15)
-    
+
     # Load model
-    trainer = load_model(project_root/'saved_models/trained_model_ruxiao_density_info_penalty3_rho50_overfit1_epoch_400_q128_64_64_32_seed22.pth')
+    trainer = load_model('saved_models/syn_50house_300bri_70bond_alpha0.5_fastgrow.pth')
     
     # Evaluate
     results = evaluate_model_corrected(trainer, test_data, test_end_time=23)
     
     # Print results
-    print_evaluation_results(results, test_data['ground_truth_network'], trainer)
+    print_evaluation_results(results, data_path+'/household_states_raw.csv', trainer, test_data)
     
     # # Save results
     # with open('results.pkl', 'wb') as f:
     #     pickle.dump(results, f)
     
-    print("\nResults saved to results.pkl")
+    # print("\nResults saved to results.pkl")
 
 if __name__ == "__main__":
     main()
