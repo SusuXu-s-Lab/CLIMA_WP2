@@ -59,7 +59,7 @@ linked_df, _ = link_device_trajectories_optimized(
 user_group_df, result_df_with_group=user_group_links(start_date, linked_df)
 
 '''
-4. Identify Social Group
+4. Identify Social Links using DTW
 '''
 df_dtw_results=dtw_compute(result_df_with_group,start_time, end_time)
 
