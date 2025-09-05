@@ -45,13 +45,13 @@ filtered_df, min_lat, max_lat, min_lon, max_lon=read_region_data(selected_region
 '''
 filtered_df = apply_residency_filter(filtered_df, min_lat, max_lat, min_lon, max_lon)
 
-filtered_df = apply_residency_filter_appear(filtered_df, min_appearances=30)
+linked_df = apply_residency_filter_appear(filtered_df, min_appearances=30)
 
-linked_df, _ = link_device_trajectories_optimized(
-    filtered_df,
-    max_time_gap_seconds=3600,
-    geohash_digit_tolerance=8
-)
+# linked_df, _ = link_device_trajectories_optimized(
+#     filtered_df,
+#     max_time_gap_seconds=3600,
+#     geohash_digit_tolerance=8
+# )
 
 '''
 3. Identify Social Group
