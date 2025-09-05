@@ -6,6 +6,7 @@ import geohash
 import numpy as np
 from collections import defaultdict
 import os
+import pdb
 
 
 def read_save_all_data(start_date, end_date, base_path):
@@ -13,6 +14,7 @@ def read_save_all_data(start_date, end_date, base_path):
     current_date = start_date
     while current_date <= end_date:
         date_str = current_date.strftime('%Y%m%d')
+
         parquet_file_path = f"{base_path}{date_str}/"
 
         try:

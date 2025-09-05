@@ -15,22 +15,22 @@ from group_network import *
 
 
 # Data path
-base_path = 'toy datasets-20250723T205019Z-1-001/toy datasets/'
+base_path = 'toy_datasets/toy_datasets/'
 
 # Define the starting month of the whole project. 2022-08-01 to 2023-07-31
 original_date=datetime(2022, 8, 1)
 
 # Define the pre disaster date range
 start_date = datetime(2020, 1, 1)
-end_date = datetime(2020, 2, 26)
+end_date = datetime(2020, 2, 1)
 
 # 1. Filter Holiday records from 2019-12-24 18:00 to 22:00
-start_time = pd.Timestamp("2022-12-24 18:00:00")
-end_time   = pd.Timestamp("2022-12-24 22:00:00")
+start_time = pd.Timestamp("2020-12-24 18:00:00")
+end_time   = pd.Timestamp("2020-12-24 22:00:00")
 
 # Select the location you want
 # somewhere in Maryland, Florida, NYC, Longisland, A small county in the middle of Long Island, Region around Brookhaven and Mastic Beach
-selected_region = 'maryland'  
+selected_region = 'Lee_county'  
 
 '''
 1. Read Data
