@@ -146,8 +146,288 @@ def visulize_prob():
     plt.savefig("images/prob.png")
     plt.show()
 
+def visualize_p_values_gif():
+    """Create animated GIFs showing p_self and p_ji distribution changes over time"""
+    # Load p_self and p_ji data
+    p_self_df = pd.read_csv("sysnthetic_data/p_self_all_values.csv")
+    p_ji_df = pd.read_csv("sysnthetic_data/p_ji_all_values.csv")
+    
+    # Create temporary directory for frames
+    temp_dir = "tmp_frames"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    # Get unique time steps and dimensions
+    time_steps = sorted(p_self_df['time_step'].unique())
+    dimensions = sorted(p_self_df['dimension'].unique())
+    dim_names = p_self_df['dimension_name'].unique()
+    
+    # Create p_self distribution GIF
+    gif_frames_pself = []
+    
+    for t in time_steps:
+        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+        fig.suptitle(f'P_self Distribution at Time Step {t}', fontsize=16)
+        
+        for i, dim in enumerate(dimensions):
+            data = p_self_df[(p_self_df['time_step'] == t) & (p_self_df['dimension'] == dim)]
+            if not data.empty:
+                values = data['p_self_value'].values
+                axes[i].hist(values, bins=20, color='lightblue', edgecolor='black', alpha=0.7)
+                axes[i].set_title(f'{data["dimension_name"].iloc[0]}')
+                axes[i].set_xlabel('P_self Value')
+                axes[i].set_ylabel('Frequency')
+                axes[i].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        frame_path = os.path.join(temp_dir, f"pself_frame_{t:03d}.png")
+        plt.savefig(frame_path)
+        gif_frames_pself.append(imageio.imread(frame_path))
+        plt.close()
+    
+    # Save p_self GIF
+    imageio.mimsave("images/p_self_distribution.gif", gif_frames_pself, duration=0.5, loop=0)
+    
+    # Create p_ji distribution GIF
+    gif_frames_pji = []
+    
+    for t in time_steps:
+        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+        fig.suptitle(f'P_ji Distribution at Time Step {t}', fontsize=16)
+        
+        for i, dim in enumerate(dimensions):
+            data = p_ji_df[(p_ji_df['time_step'] == t) & (p_ji_df['dimension'] == dim)]
+            if not data.empty:
+                values = data['p_ji_value'].values
+                axes[i].hist(values, bins=20, color='lightcoral', edgecolor='black', alpha=0.7)
+                axes[i].set_title(f'{data["dimension_name"].iloc[0]}')
+                axes[i].set_xlabel('P_ji Value')
+                axes[i].set_ylabel('Frequency')
+                axes[i].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        frame_path = os.path.join(temp_dir, f"pji_frame_{t:03d}.png")
+        plt.savefig(frame_path)
+        gif_frames_pji.append(imageio.imread(frame_path))
+        plt.close()
+    
+    # Save p_ji GIF
+    imageio.mimsave("images/p_ji_distribution.gif", gif_frames_pji, duration=0.5, loop=0)
+    
+    # Clean up temporary files
+    for frame in os.listdir(temp_dir):
+        os.remove(os.path.join(temp_dir, frame))
+    os.rmdir(temp_dir)
+    
+    print("Generated p_self_distribution.gif and p_ji_distribution.gif in images/ folder")
+
+def create_activation_distribution_gifs(csv_file_path='sysnthetic_data/activation_records.csv', output_dir='images'):
+    """
+    Create GIF animations showing the distribution of prod_term and activate_prob over time.
+    
+    Parameters:
+    -----------
+    csv_file_path : str
+        Path to the activation_records.csv file
+    output_dir : str
+        Directory to save the GIF files
+    """
+    
+    # Create output directory if it doesn't exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Read the activation records
+    print("Loading activation records...")
+    df = pd.read_csv(csv_file_path)
+    
+    # Get unique time steps and dimensions
+    time_steps = sorted(df['time_step'].unique())
+    dimensions = sorted(df['dimension'].unique())
+    dim_names = ['vacancy_state', 'repair_state', 'sales_state']
+    
+    print(f"Found {len(time_steps)} time steps and {len(dimensions)} dimensions")
+    
+    # Create GIFs for each dimension
+    for dim in dimensions:
+        dim_name = dim_names[dim]
+        dim_data = df[df['dimension'] == dim]
+        
+        if len(dim_data) == 0:
+            print(f"No data found for dimension {dim} ({dim_name})")
+            continue
+            
+        print(f"Creating GIFs for dimension {dim} ({dim_name})...")
+        
+        # Create prod_term distribution GIF
+        create_single_activation_gif(
+            dim_data, 
+            'prod_term', 
+            f'{output_dir}/prod_term_distribution_{dim_name}.gif',
+            f'Product Term Distribution Over Time - {dim_name.replace("_", " ").title()}',
+            time_steps
+        )
+        
+        # Create activate_prob distribution GIF
+        create_single_activation_gif(
+            dim_data, 
+            'activate_prob', 
+            f'{output_dir}/activate_prob_distribution_{dim_name}.gif',
+            f'Activation Probability Distribution Over Time - {dim_name.replace("_", " ").title()}',
+            time_steps
+        )
+    
+    print("All activation GIFs created successfully!")
+
+def create_single_activation_gif(data, column, output_path, title, time_steps):
+    """
+    Create a single GIF showing distribution over time for a specific column.
+    """
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    def animate(frame):
+        ax.clear()
+        
+        t = time_steps[frame]
+        t_data = data[data['time_step'] == t][column].dropna()
+        
+        if len(t_data) == 0:
+            ax.text(0.5, 0.5, f'No data for time step {t}', 
+                   transform=ax.transAxes, ha='center', va='center')
+            ax.set_title(f'{title}\nTime Step: {t}')
+            return
+        
+        # Create histogram
+        ax.hist(t_data, bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+        
+        # Add statistics
+        mean_val = t_data.mean()
+        std_val = t_data.std()
+        median_val = t_data.median()
+        
+        # Set consistent y-axis limits based on all data
+        all_data = data[column].dropna()
+        if len(all_data) > 0:
+            hist_counts, _ = np.histogram(all_data, bins=30)
+            ax.set_ylim(0, hist_counts.max() * 1.1)
+        
+        # Set x-axis limits
+        ax.set_xlim(all_data.min() - 0.01, all_data.max() + 0.01)
+        
+        ax.set_title(f'{title}\nTime Step: {t}')
+        ax.set_xlabel(column.replace('_', ' ').title())
+        ax.set_ylabel('Frequency')
+        
+        # Add statistics text
+        stats_text = f'Mean: {mean_val:.4f}\nStd: {std_val:.4f}\nMedian: {median_val:.4f}\nCount: {len(t_data)}'
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+               verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        
+        plt.tight_layout()
+    
+    # Create animation
+    anim = FuncAnimation(fig, animate, frames=len(time_steps), interval=500, repeat=True)
+    
+    # Save as GIF
+    print(f"Saving {output_path}...")
+    anim.save(output_path, writer='pillow', fps=2)
+    plt.close(fig)
+
+def create_combined_activation_gif(csv_file_path='sysnthetic_data/activation_records.csv', output_dir='images'):
+    """
+    Create a combined GIF showing both prod_term and activate_prob distributions side by side.
+    """
+    
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Read the activation records
+    print("Loading activation records for combined GIF...")
+    df = pd.read_csv(csv_file_path)
+    
+    time_steps = sorted(df['time_step'].unique())
+    dimensions = sorted(df['dimension'].unique())
+    dim_names = ['vacancy_state', 'repair_state', 'sales_state']
+    
+    for dim in dimensions:
+        dim_name = dim_names[dim]
+        dim_data = df[df['dimension'] == dim]
+        
+        if len(dim_data) == 0:
+            continue
+            
+        print(f"Creating combined GIF for dimension {dim} ({dim_name})...")
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        def animate(frame):
+            ax1.clear()
+            ax2.clear()
+            
+            t = time_steps[frame]
+            t_data = dim_data[dim_data['time_step'] == t]
+            
+            if len(t_data) == 0:
+                for ax in [ax1, ax2]:
+                    ax.text(0.5, 0.5, f'No data for time step {t}', 
+                           transform=ax.transAxes, ha='center', va='center')
+                ax1.set_title(f'Product Term Distribution\nTime Step: {t}')
+                ax2.set_title(f'Activation Probability Distribution\nTime Step: {t}')
+                return
+            
+            # Plot prod_term
+            prod_data = t_data['prod_term'].dropna()
+            if len(prod_data) > 0:
+                ax1.hist(prod_data, bins=20, alpha=0.7, color='lightcoral', edgecolor='black')
+                mean_prod = prod_data.mean()
+                ax1.axvline(mean_prod, color='red', linestyle='--', linewidth=2, label=f'Mean: {mean_prod:.4f}')
+                ax1.legend()
+            
+            # Plot activate_prob
+            prob_data = t_data['activate_prob'].dropna()
+            if len(prob_data) > 0:
+                ax2.hist(prob_data, bins=20, alpha=0.7, color='lightgreen', edgecolor='black')
+                mean_prob = prob_data.mean()
+                ax2.axvline(mean_prob, color='green', linestyle='--', linewidth=2, label=f'Mean: {mean_prob:.4f}')
+                ax2.legend()
+            
+            ax1.set_title(f'Product Term Distribution\nTime Step: {t}')
+            ax1.set_xlabel('Product Term')
+            ax1.set_ylabel('Frequency')
+            
+            ax2.set_title(f'Activation Probability Distribution\nTime Step: {t}')
+            ax2.set_xlabel('Activation Probability')
+            ax2.set_ylabel('Frequency')
+            
+            # Set consistent axis limits
+            all_prod = dim_data['prod_term'].dropna()
+            all_prob = dim_data['activate_prob'].dropna()
+            
+            if len(all_prod) > 0:
+                ax1.set_xlim(all_prod.min() - 0.01, all_prod.max() + 0.01)
+            if len(all_prob) > 0:
+                ax2.set_xlim(all_prob.min() - 0.01, all_prob.max() + 0.01)
+            
+            plt.suptitle(f'{dim_name.replace("_", " ").title()} - Activation Analysis', fontsize=14)
+            plt.tight_layout()
+        
+        # Create animation
+        anim = FuncAnimation(fig, animate, frames=len(time_steps), interval=500, repeat=True)
+        
+        # Save as GIF
+        output_path = f'{output_dir}/combined_activation_distribution_{dim_name}.gif'
+        print(f"Saving {output_path}...")
+        anim.save(output_path, writer='pillow', fps=2)
+        plt.close(fig)
+
+# Uncomment the lines below to run specific visualizations
 visulize_sim()
-visulize_interpot_gif()
+# visulize_interpot_gif()
 visulize_links()
 visulize_state()
 visulize_prob()
+# visualize_p_values_gif()
+
+# Uncomment to create activation distribution GIFs
+create_activation_distribution_gifs()
+create_combined_activation_gif()

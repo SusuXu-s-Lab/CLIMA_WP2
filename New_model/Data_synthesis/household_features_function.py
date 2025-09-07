@@ -51,15 +51,37 @@ def compute_interaction_potential(house_df, state_df, t):
     # Step 4: concatenate full feature vector as [f_ij, s_i, s_j, dist]
     full_feat = np.concatenate([f_ij, s_i, s_j, dist_feat], axis=2)  # (N, N, 10)
     if t==0:
-        weights = np.array([-3.0, -6.0, -7.0,     # f_ij part
-                            -1.0, -3.0, -1.0,     # s_i part
-                            -1.0, -5.0, -2.0,     # s_j part
-                            -20.0])/15       # dist_ij
+        weights = np.array([12, 13.0, 6.0,     # f_ij part
+                            6.5, 7.7, 6.4,     # s_i part
+                            7.0, 5.0, 4.2,     # s_j part
+                            -2.0])    # dist_ij
     else:
-        weights = np.array([-9, -13.0, -15.0,     # f_ij part
-                            -10.0, -7.0, -5.0,     # s_i part
-                            -6.0, -5.0, -4.0,     # s_j part
-                            -20.0])/3     # dist_ij
+        # Add time-varying components to make interaction potential dynamic
+        # Create oscillating factors that change over time
+        time_factor1 = 0.5 + 0.5 * np.sin(t * 0.4)      # oscillates between 0-1
+        time_factor2 = 0.3 + 0.7 * np.cos(t * 0.3)      # oscillates between 0.3-1.0
+        time_decay = np.exp(-t/15)                       # exponential decay factor
+        
+        # Add small random variations to simulate external shocks
+        np.random.seed(int(t * 1000) % 2**32)  # Deterministic randomness based on time
+        random_variations = np.random.normal(0, 0.05, 10)
+        
+        # Base weights modified by time factors
+        base_weights = np.array([0.3, -3, 0.4,        # f_ij part
+                                -0.6, 1.2, -0.2,       # s_i part  
+                                0.3, -2.0, 0.4,       # s_j part
+                                -4.0])                 # dist_ij
+        
+        # Apply time-varying modifications
+        weights = base_weights.copy()
+        weights[0] *= time_factor1                      # demographic income effect varies
+        weights[2] *= time_factor2                      # demographic race effect varies
+        weights[4] *= (0.8 + 0.4 * time_decay)        # state interaction strength decays
+        weights[6] *= time_factor1                      # cross-state effects vary
+        weights[9] *= (0.5 + 0.5 * time_factor2)      # distance penalty varies
+        
+        # Add random variations
+        weights = weights + random_variations
     dot = np.tensordot(full_feat, weights, axes=([2], [0]))  # shape (N, N)
     # print("dot range:", dot.min(), dot.max(), dot.mean())
     interaction = 1 / (1 + np.exp(-dot))  # sigmoid
