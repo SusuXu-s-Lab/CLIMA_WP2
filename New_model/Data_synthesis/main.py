@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore")
 
 
 # Hyper parameter definition
-alpha=0.5
+alpha=1.3
 beta=0.0001
 gamma=0.6
 L=1
@@ -36,7 +36,7 @@ home2 = df_ori[['home_2']].rename(columns={'home_2': 'home'})
 # Merge and remove duplicates
 house_df = pd.concat([home1, home2], ignore_index=True).drop_duplicates(subset='home')
 house_df = house_df.dropna()
-house_df=house_df[:50]
+house_df=house_df[:200]
 '''
 Household Feautres Generation
 '''
@@ -62,31 +62,23 @@ T=0 Links Generation
 # Generate initial link matrix using t=0 similarity and interaction matrices
 initial_links_df = generate_initial_links(similarity_df, interaction_df, alpha_0=alpha, beta_0=beta)
 
-# # k: state dimension (0=repair, 1=vacancy, 2=sales)
-# # t: timestep
-# t = 0
-# k = 0
-# ## Compute p_self^k_i(t)
-# p_self_series = compute_p_self(house_df_with_features.set_index('home'), house_states, t, k, L=L)
-#
-# ## Compute p_(ij)^k(t)
-# p_ij_series = compute_p_ji_linear(initial_links_df, house_df_with_features, house_states,t, k,L=L)
-#
-# ### Compute p_(ij)^k(t)
-# house_states=update_full_states_one_step(house_states, p_self_series,p_ij_series, initial_links_df,0, 0)
-#
-# ## Update links_df when t>0
-# new_link_df=update_link_matrix_one_step(similarity_df, interaction_df, initial_links_df,house_states,0,alpha_bonding=alpha,beta_form=beta,gamma=gamma)
 
 # ---- helper: compute similarity / interaction for new t if features vary ----
 
 # ---- store link matrices for each t (t index aligned with "time") ----------
 link_snapshots = {0: initial_links_df.copy()}
-inter_t_list = []
+# inter_t_list = []
 
 # ---- store p_self and p_ji statistics for each time step ----
 p_self_stats = []  # Will store records of {t, k, p_self_mean}
 p_ji_stats = []    # Will store records of {t, k, p_ji_nonzero_mean}
+
+# ---- store all individual p_self and p_ji values ----
+p_self_all_values = []  # Will store all individual p_self values
+p_ji_all_values = []    # Will store all individual p_ji values
+
+# ---- store activation records (prod_term and activate_prob) ----
+activation_records = []  # Will store all activation records
 
 # ---------------- main simulation loop (t = 0 … T-1) -----------------------
 for t in tqdm(range(T - 1)):              # we already have states at t, produce t+1
@@ -141,8 +133,30 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
             'nonzero_count': nonzero_mask.sum()
         })
         
+        # ---- Record all individual p_self values ----
+        for household_id in p_self.index:
+            p_self_all_values.append({
+                'time_step': t,
+                'dimension': k,
+                'dimension_name': state_dims[k],
+                'household_id': household_id,
+                'p_self_value': p_self[household_id]
+            })
+        
+        # ---- Record all individual p_ji values ----
+        for household_i in p_ji.index:
+            for household_j in p_ji.columns:
+                p_ji_all_values.append({
+                    'time_step': t,
+                    'dimension': k,
+                    'dimension_name': state_dims[k],
+                    'household_i': household_i,
+                    'household_j': household_j,
+                    'p_ji_value': p_ji.loc[household_i, household_j]
+                })
+        
         # --- update states (writes into time t+1 row) -----------------------
-        house_states = update_full_states_one_step(
+        house_states, step_activation_records = update_full_states_one_step(
             house_df_with_features,
             house_states,                     # full long table
             p_self,
@@ -151,18 +165,21 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
             t=t,
             k=k
         )
+        
+        # Collect activation records
+        activation_records.extend(step_activation_records)
 
     # -------------------------------------------------
     # link-transition   G_t  →  G_{t+1}
     # -------------------------------------------------
     # similarity / interaction may be time-varying; here we fetch for step t
     sim_t = compute_similarity(house_df_with_features)
-    inter_t = compute_interaction_potential(house_df_with_features, house_states, t=t+1)
-    inter_t_list.append(inter_t.copy())
+    # inter_t = compute_interaction_potential(house_df_with_features, house_states, t=t+1)
+    # inter_t_list.append(inter_t.copy())
 
     link_next = update_link_matrix_one_step(
         sim_t,
-        inter_t,
+        interaction_df,
         link_snapshots[t],                    # G_t
         house_states,
         t=t,
@@ -238,7 +255,6 @@ links_long_df.to_csv(folder_path+'ground_truth_network_raw.csv',index=False)
 blocked_df.to_csv(folder_path+'observed_network_raw.csv',index=False)
 house_df.to_csv(folder_path+'household_locations_raw.csv',index=False)
 house_df_with_features.to_csv(folder_path+'household_features_raw.csv', index=False)
-np.save(folder_path+"inter_t_all.npy", np.array(inter_t_list))  # shape: (T-1, N, N)
 similarity_df.to_csv(folder_path+"similarity_df_raw.csv")
 
 # ---- Save p_self and p_ji statistics ----
@@ -249,5 +265,21 @@ p_ji_df = pd.DataFrame(p_ji_stats)
 # Save statistics to CSV files
 p_self_df.to_csv(folder_path+"p_self_statistics.csv", index=False)
 p_ji_df.to_csv(folder_path+"p_ji_statistics.csv", index=False)
+
+# ---- Save all individual p_self and p_ji values ----
+# Convert all values lists to DataFrames
+p_self_all_df = pd.DataFrame(p_self_all_values)
+p_ji_all_df = pd.DataFrame(p_ji_all_values)
+
+# Save all individual values to CSV files
+p_self_all_df.to_csv(folder_path+"p_self_all_values.csv", index=False)
+p_ji_all_df.to_csv(folder_path+"p_ji_all_values.csv", index=False)
+
+# ---- Save activation records (prod_term and activate_prob) ----
+# Convert activation records to DataFrame
+activation_df = pd.DataFrame(activation_records)
+
+# Save activation records to CSV file
+activation_df.to_csv(folder_path+"activation_records.csv", index=False)
 
 

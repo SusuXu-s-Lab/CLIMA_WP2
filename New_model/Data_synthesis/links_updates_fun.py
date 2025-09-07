@@ -21,8 +21,8 @@ def generate_initial_links(similarity_df, interaction_df, alpha_0=0.9, beta_0=0.
 
     logits = np.vstack((logit_0, logit_1, logit_2)).T  # shape (K, 3)
     probs = softmax(logits, axis=1)  # shape (K, 3)
-    # Sample link type from categorical distribution
-    link_types = np.array([np.random.choice([0, 1, 2], p=p) for p in probs])
+    # Use deterministic thresholding: choose link type with highest probability
+    link_types = np.argmax(probs, axis=1)
 
     # Fill symmetric link matrix
     link_matrix = np.zeros((N, N), dtype=int)
@@ -80,18 +80,41 @@ def compute_p_self(house_df, full_state_df, t, k, L=3):
     ], axis=1)  # final shape = (N, 3 + 2L + 1)
 
     # (4) weights
+    # Original constant weights (commented out):
     # w_static = np.array([0.1, 0.2, 0.2])             # income, age, race
-    w_static = np.array([-5, -7, -9])             # income, age, race  # Has to be negative, otherwise p_ij will be bigger than 0.5 at first few time step
-
-    w_hist   = np.full(2 * L, -9)                  # L steps of 2 non-k dims
-    w_time = np.array([-2])
+    # w_static = np.array([-2.7, -4.8, -3.3])*3            
+    # w_hist   = np.full(2 * L, -0.05)                  # L steps of 2 non-k dims
+    # w_time = np.array([-0.05])
+    
+    # Sampled weights from distributions with small variance:
+    w_static = np.random.normal(np.array([-2.7, -4.8, -3.3])*3, 0.1)  # income, age, race weights
+    w_hist   = np.random.normal(-0.05, 0.005, 2 * L)    # L steps of 2 non-k dims, small variance
+    w_time   = np.random.normal([-0.05], 0.005, 1)      # time weight, small variance
     weights  = np.concatenate([w_static, w_hist, w_time])
     
     assert weights.shape[0] == all_feat.shape[1], "Shape mismatch in feature × weight"
 
-    # (5) sigmoid scoring
+    # (5) sigmoid scoring with time-based cyclical variation
     dot = all_feat @ weights
-    p_self = 1 / (1 + np.exp(-dot))
+    
+    # Add periodic/seasonal variation based on time
+    # Multiple cycles: annual (period=12), quarterly (period=3), monthly fluctuation
+    annual_cycle = 0.1 * np.sin(2 * np.pi * t / 12.0)      # Annual cycle with amplitude 0.1
+    quarterly_cycle = 0.1 * np.cos(2 * np.pi * t / 3.0)   # Quarterly cycle with amplitude 0.05
+    monthly_trend = 0.05 * np.sin(2 * np.pi * t / 1.0)     # Monthly fluctuation with amplitude 0.02
+    
+    # Combine cyclical components
+    time_variation = annual_cycle + quarterly_cycle + monthly_trend
+    
+    # Apply time variation to the dot product
+    dot_with_cycles = dot + time_variation
+    
+    p_self = 1 / (1 + np.exp(-dot_with_cycles))
+    
+    # Cap probabilities: limit to maximum 0.8 and set values below 0.1 to 0
+    p_self = np.minimum(p_self, 0.6)  # Cap at 0.8
+    p_self[p_self < 0.1] = 0.0        # Set values below 0.1 to 0
+    
     return pd.Series(p_self, index=house_df.index)
 
 def compute_p_ji_linear(link_df,
@@ -161,17 +184,32 @@ def compute_p_ji_linear(link_df,
             feat_all_norm[..., d] = 0.0
         else:
             feat_all_norm[..., d] = (x - x_min) / (x_max - x_min)
-    
+
 
     # ---------- (4) weighted linear score ----------
-    w_demo   = np.array([-17.0, -20, -17])
-    w_hist   = np.full(2 * L, -14.0)                # applies to both src & tgt
-    w_link   = np.array([5])
-    w_dist   = np.array([-25])
-    w_time = np.array([-20.0])
-    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])*2    # (3+4L+2,)
-    scores = np.tensordot(feat_all_norm, weights, axes=([-1], [0]))             # (N,N)
+    # Original constant weights (commented out):
+    # w_demo   = np.array([-4.7, -4.5, -4.7])
+    # w_hist   = np.full(2 * L, -0.04)                # applies to both src & tgt
+    # w_link   = np.array([1.2])
+    # w_dist   = np.array([-1])
+    # w_time = np.array([-0.05])
+    
+    # Sampled weights from distributions with small variance:
+    w_demo   = np.random.normal([-4.7, -4.5, -4.7], 0.05, 3)  # demographic weights
+    w_hist   = np.random.normal(-0.04, 0.005, 2 * L)           # history weights, smaller variance
+    w_link   = np.random.normal([1.2], 0.05, 1)                # link weight
+    w_dist   = np.random.normal([-1], 0.05, 1)                 # distance weight
+    w_time   = np.random.normal([-0.05], 0.005, 1)             # time weight, smaller variance
+    weights  = np.concatenate([w_demo, w_hist, w_hist, w_link, w_dist, w_time])  # (3+4L+2,)
+    scores = np.tensordot(feat_all_norm, weights, axes=([-1], [0]))            # (N,N)
     p_mat  = 1.0 / (1.0 + np.exp(-scores))                                 # sigmoid
+    
+    # Limit values to maximum 0.5 and set values below 0.1 to 0
+    p_mat = np.minimum(p_mat, 0.5)  # Cap at 0.5
+    p_mat[p_mat < 0.1] = 0.0        # Set values below 0.1 to 0
+    
+    # p_mat  = 0.9 / (1.0 + np.exp(-scores))                                 # sigmoid
+
 
     # ---------- (5) mask out self-pairs & absent links ----------
     mask = (link_mat == 0) | np.eye(N, dtype=bool)
@@ -223,20 +261,14 @@ def update_link_matrix_one_step(similarity_df: pd.DataFrame,
     sim_mat = similarity_df.values
     inter_mat = interaction_df.values
 
-    rng = np.random.default_rng()
-
     for i in range(N):
         for j in range(i + 1, N):                  # upper-triangle only
             prev = link_prev[i, j]
 
             # 1)  from NO-LINK  (Eq. 13-14) ---------------------------------
             if prev == 0:
-                both_stay = (vac_t[i] == 0) and (vac_t[j] == 0)
-                if both_stay:
-                    probs = [1.0-inter_mat[i, j], inter_mat[i, j]]
-                else:
-                    probs = [1, 0]
-                new = rng.choice([0, 2], p=probs)
+                # No new bridging links are created - stay as no-link
+                new = 0
 
             # 2)  from BONDING  (Eq. 15)  – stays bonding
             elif prev == 1:
@@ -245,12 +277,9 @@ def update_link_matrix_one_step(similarity_df: pd.DataFrame,
             # 3)  from BRIDGING  (Eq.16-17)
             else:                                  # prev == 2
                 both_stay = (vac_t[i] == 0) and (vac_t[j] == 0)
-                p22 = 1 if both_stay else inter_mat[i, j]
-                p22 = np.clip(p22, 0.0, 1.0)
-                p20 = 1 - p22                    # may drop to no-link
-                probs=[p20, p22]
-
-                new = rng.choice([0, 2], p=probs)
+                # Bridging links only disappear if either household becomes vacant
+                # They are not affected by interaction potential
+                new = 2 if both_stay else 0
 
             # fill symmetric entries
             link_new[i, j] = link_new[j, i] = new
