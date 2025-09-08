@@ -1,90 +1,297 @@
 import torch
 import torch.nn.functional as F
-from typing import Dict
+from typing import Dict, List, Optional
+from collections import defaultdict
 
 from .neural_networks import InfluenceNN, SelfActivationNN
-from .utils import get_state_history_excluding_k,get_full_state_history
+from .utils import get_state_history_excluding_k, get_full_state_history
 
 class StateTransition:
-    """State transition with FR-SIC process using f_ij = |features_i - features_j|"""
+    """State transition with FR-SIC process and lingering influence support"""
     
-    def __init__(self, self_nn: SelfActivationNN, influence_nn: InfluenceNN, L: int = 1):
+    def __init__(self, self_nn: SelfActivationNN, influence_nn: InfluenceNN, L: int = 1,
+                 L_linger: int = 3, decay_type: str = 'exponential', decay_rate: float = 0.5):
         self.self_nn = self_nn
         self.influence_nn = influence_nn
         self.L = L
         
-    def compute_activation_probability(self, household_idx: torch.Tensor, decision_type: int,  # 0=vacant, 1=repair, 2=sell
-                                     features: torch.Tensor, states: torch.Tensor, distances: torch.Tensor,
-                                     network_data,  # NetworkData object for observed links
-                                     gumbel_samples: Dict[str, torch.Tensor], time: int):  # Continuous Gumbel-Softmax samples, time is current timestep
-        """
-        OPTIMIZED: FR-SIC process with vectorized operations for maximum performance.
-        Redirects to the highly optimized vectorized implementation.
-        """
-        return self.compute_activation_probability_vectorized(
-            household_idx, decision_type, features, states, distances, 
-            network_data, gumbel_samples, time
-        )
-    
-    def compute_activation_probability_vectorized(self, household_idx: torch.Tensor, decision_type: int,
-                                                features: torch.Tensor, states: torch.Tensor, distances: torch.Tensor,
-                                                network_data, gumbel_samples: Dict[str, torch.Tensor], time: int):
-        """
-        HIGHLY OPTIMIZED: Vectorized FR-SIC process computation.
+        # NEW: Lingering influence parameters
+        self.L_linger = L_linger          # How many timesteps influence persists
+        self.decay_type = decay_type      # 'exponential', 'linear', or 'step'
+        self.decay_rate = decay_rate      # Decay speed parameter
         
-        Key optimizations:
-        1. Batch processing of state histories
-        2. Pre-computation of neighbor relationships
-        3. Vectorized neural network calls
-        4. Elimination of Python loops where possible
+        # NEW: Link break history tracking
+        # Structure: {household_i: [{'neighbor': j, 'link_type': 2, 'break_time': t}, ...]}
+        self.broken_links_history = defaultdict(list)
+        
+    def add_broken_link(self, household_i: int, household_j: int, link_type: int, break_time: int):
+        """Record a broken link for both households"""
+        # Add to both households' history (since links are bidirectional)
+
+        # print(f"ADDING BROKEN LINK: {household_i}-{household_j}, break_time={break_time}")
+        # # 打印调用栈
+        # import traceback
+        # traceback.print_stack()
+
+        self.broken_links_history[household_i].append({
+            'neighbor': household_j,
+            'link_type': link_type,
+            'break_time': break_time
+        })
+        self.broken_links_history[household_j].append({
+            'neighbor': household_i, 
+            'link_type': link_type,
+            'break_time': break_time
+        })
+    
+    def cleanup_expired_history(self, current_time: int):
+        """Remove link break records older than L_linger timesteps"""
+        for household_i in list(self.broken_links_history.keys()):
+            # Keep only recent breaks
+            self.broken_links_history[household_i] = [
+                record for record in self.broken_links_history[household_i]
+                if current_time - record['break_time'] < self.L_linger
+            ]
+            # Remove empty entries
+            if not self.broken_links_history[household_i]:
+                del self.broken_links_history[household_i]
+    
+    def get_decay_weight(self, time_since_break: int) -> float:
+        # """Calculate decay weight"""
+        # if time_since_break >= self.L_linger:
+        #     return 0.0
+        # if self.decay_type == 'exponential':
+        #     # Convert to tensor first, then back to float
+        #     decay_tensor = torch.tensor(-self.decay_rate * time_since_break)
+        #     return torch.exp(decay_tensor).item()
+        # elif self.decay_type == 'linear':
+        #     return max(0.0, 1.0 - time_since_break / self.L_linger)
+        # else:  # step
+        #     return 1.0
+        # print(f"DEBUG: time_since_break={time_since_break}, decay_rate={self.decay_rate}")
+    
+        if time_since_break >= self.L_linger:
+            return 0.0
+        if self.decay_type == 'exponential':
+            exponent = -self.decay_rate * time_since_break
+            # print(f"DEBUG: exponent={exponent}")
+            
+            # 安全检查
+            if exponent > 5.0:  # 如果指数太大，说明有问题
+                print(f"WARNING: Exponent too large: {exponent}, clamping to 0.0")
+                return 0.0
+                
+            decay_tensor = torch.tensor(exponent)
+            result = torch.exp(decay_tensor).item()
+            # print(f"DEBUG: decay_weight={result}")
+            return result
+    
+    def detect_and_record_link_breaks(self, network_data, gumbel_samples: Dict[str, torch.Tensor], 
+                                    current_time: int):
+        """
+        Detect link breaks from network evolution and record them in history.
+        This should be called after network state updates but before computing influences.
+        """
+        if current_time == 0:
+            return  # No breaks possible at t=0
+        
+        # Get current sample (assume we're using the first sample for break detection)
+        current_sample = gumbel_samples[0] if isinstance(gumbel_samples, list) else gumbel_samples
+        
+        # Check all pairs for potential breaks
+        for pair_key, link_probs in current_sample.items():
+            parts = pair_key.split('_')
+            if len(parts) != 3:
+                continue
+            
+            i, j, t = int(parts[0]), int(parts[1]), int(parts[2])
+            if t != current_time:
+                continue
+            
+            # Get current link type (most probable)
+            current_link_type = torch.argmax(link_probs).item()
+            
+            # Check if this was a bridging link at previous timestep
+            prev_pair_key = f"{i}_{j}_{current_time-1}"
+            if prev_pair_key in current_sample:
+                prev_link_type = torch.argmax(current_sample[prev_pair_key]).item()
+                
+                # If was bridging (type 2) and now is no link (type 0), record break
+                if prev_link_type == 2 and current_link_type == 0:
+                    self.add_broken_link(i, j, prev_link_type, current_time)
+                    # print(f"Recorded bridging link break: {i}-{j} at t={current_time}")
+    
+    def compute_lingering_influence_probability(self, household_idx: torch.Tensor, decision_type: int,
+                                              features: torch.Tensor, states: torch.Tensor, 
+                                              distances: torch.Tensor, time: int) -> torch.Tensor:
+        """
+        Compute lingering influence from recently broken links.
+        
+        Args:
+            household_idx: Target households to compute influence for
+            decision_type: Decision type (0=vacant, 1=repair, 2=sell)
+            features, states, distances: Same as original function
+            time: Current timestep
+            
+        Returns:
+            lingering_influence_probs: [batch_size] tensor of lingering influence probabilities
+        """
+        # print(f"=== Lingering influence computation at time={time} ===")
+        # total_records = sum(len(records) for records in self.broken_links_history.values())
+        # print(f"Total history records: {total_records}")
+        
+        # for hh, records in self.broken_links_history.items():
+        #     for record in records:
+        #         break_time = record['break_time']
+        #         time_since_break = time - break_time
+        #         print(f"Record: hh={hh}, neighbor={record['neighbor']}, break_time={break_time}, time_since_break={time_since_break}")
+
+
+
+        batch_size = len(household_idx)
+        lingering_influence_probs = torch.ones(batch_size, dtype=torch.float32)  # Start with 1.0 (no influence)
+        
+        # Process each household in the batch
+        for batch_idx, hh_i in enumerate(household_idx):
+            hh_i_val = hh_i.item()
+            
+            # Get broken link history for this household
+            if hh_i_val not in self.broken_links_history:
+                continue  # No broken links, keep influence prob at 1.0
+            
+            # Process each broken link
+            household_lingering_product = 1.0  # Product of (1 - lingering_influence)
+            
+            for broken_link in self.broken_links_history[hh_i_val]:
+                neighbor_j = broken_link['neighbor']
+                link_type = broken_link['link_type']
+                break_time = broken_link['break_time']
+                
+                time_since_break = time - break_time
+                if time_since_break >= self.L_linger:
+                    continue  # Too old, no lingering influence
+                
+                # Check if the former neighbor is active for this decision type
+                if states[neighbor_j, time, decision_type] != 1:
+                    continue  # Former neighbor not active, no influence
+                
+                # Compute decay weight
+                decay_weight = self.get_decay_weight(time_since_break)
+                if decay_weight <= 0:
+                    continue
+                
+                # Compute original influence strength (same as active neighbor influence)
+                # Create dummy link representation for the broken link
+                link_repr = torch.zeros(1, 3)
+                link_repr[0, link_type] = 1.0  # One-hot encoding of original link type
+                
+                # Get state histories
+                j_state_hist = get_full_state_history([neighbor_j], states, time, self.L)
+                i_state_hist = get_state_history_excluding_k([hh_i_val], decision_type, states, time, self.L)
+                
+                # Features and distances
+                feat_i = features[hh_i_val].unsqueeze(0)
+                feat_j = features[neighbor_j].unsqueeze(0)
+                dist = distances[hh_i_val, neighbor_j].unsqueeze(0).unsqueeze(1)
+                
+                # Decision type and time tensors
+                decision_onehot = F.one_hot(torch.tensor(decision_type), num_classes=3).float().unsqueeze(0)
+                time_tensor = torch.full((1, 1), time, dtype=torch.float32)
+                
+                # Compute base influence probability
+                base_influence_prob = self.influence_nn(
+                    link_repr, j_state_hist, i_state_hist,
+                    feat_i, feat_j, dist, decision_onehot, time_tensor
+                ).squeeze().item()
+                
+                # Apply decay weight
+                lingering_influence_prob = decay_weight * base_influence_prob
+                
+                # Update product term
+                household_lingering_product *= (1 - lingering_influence_prob)
+                
+                # print(f"Lingering influence: {hh_i_val} <- {neighbor_j}, "
+                #       f"decay_weight={decay_weight:.3f}, "
+                #       f"base_influence={base_influence_prob:.3f}, "
+                #       f"lingering_influence={lingering_influence_prob:.3f}")
+            
+            # Convert product to final influence probability
+            lingering_influence_probs[batch_idx] = household_lingering_product
+        
+        return lingering_influence_probs
+    
+    def compute_activation_probability_with_lingering(self, household_idx: torch.Tensor, decision_type: int,
+                                                features: torch.Tensor, states: torch.Tensor, 
+                                                distances: torch.Tensor, network_data,
+                                                gumbel_samples: Dict[str, torch.Tensor], time: int):
+        """
+        Enhanced FR-SIC process with lingering influence from broken links.
+        
+        Modified FR-SIC formula:
+        P(activate) = 1 - (1 - p_self) × (1 - p_current_neighbors) × (1 - p_lingering_influence)
         """
         batch_size = len(household_idx)
-        n_households = features.shape[0]
         
         if batch_size == 0:
             return torch.tensor([])
         
-        # === OPTIMIZATION 1: Vectorized Self-Activation ===
-        hh_features = features[household_idx]  # [batch_size, feature_dim]
-        
-        # Batch compute state histories for all households at once
+        # Step 1: Compute self-activation (unchanged)
+        hh_features = features[household_idx]
         state_history_excluding_k = self._batch_get_state_history_excluding_k(
             household_idx, decision_type, states, time, self.L
         )
         
-        # Pre-compute common tensors (avoid recreation)
         decision_onehot = F.one_hot(torch.tensor(decision_type), num_classes=3).float()
         decision_onehot_batch = decision_onehot.unsqueeze(0).expand(batch_size, -1)
         time_tensor_batch = torch.full((batch_size, 1), time, dtype=torch.float32)
         
-        # Single NN call for all self-activations
         p_self = self.self_nn(hh_features, state_history_excluding_k, 
                              decision_onehot_batch, time_tensor_batch).squeeze(1)
         
-        # === OPTIMIZATION 2: Vectorized Neighbor Influence ===
-        # Pre-compute all active neighbors for the batch
+        # Step 2: Compute current neighbor influence (existing logic)
         neighbor_data = self._precompute_neighbor_relationships(
-            household_idx, states, time, decision_type, n_households
+            household_idx, states, time, decision_type, features.shape[0], network_data
         )
         
-        if len(neighbor_data['all_pairs']) == 0:
-            # No neighbors for any household
-            return p_self
+        current_neighbor_influence_probs = torch.ones(batch_size, dtype=torch.float32)
+        if len(neighbor_data['all_pairs']) > 0:
+            influence_probs = self._compute_batch_neighbor_influence(
+                neighbor_data, features, states, distances, network_data,
+                gumbel_samples, time, decision_type
+            )
+            current_neighbor_influence_probs = self._aggregate_neighbor_influences(
+                influence_probs, neighbor_data, batch_size
+            )
         
-        # Batch compute all neighbor influences at once
-        influence_probs = self._compute_batch_neighbor_influence(
-            neighbor_data, features, states, distances, network_data,
-            gumbel_samples, time, decision_type
+        # Step 3: Compute lingering influence (NEW)
+        lingering_influence_probs = self.compute_lingering_influence_probability(
+            household_idx, decision_type, features, states, distances, time
         )
         
-        # === OPTIMIZATION 3: Vectorized Product Computation ===
-        final_influence_probs = self._aggregate_neighbor_influences(
-            influence_probs, neighbor_data, batch_size
-        )
+        # Step 4: Combined FR-SIC formula with lingering influence
+        # P(activate) = 1 - (1 - p_self) × current_neighbor_product × lingering_product
+        activation_probs = 1 - (1 - p_self) * current_neighbor_influence_probs * lingering_influence_probs
         
-        # FR-SIC formula
-        activation_probs = 1 - (1 - p_self) * final_influence_probs
         return activation_probs
+    
+    # Update the main compute_activation_probability method to use the new enhanced version
+    def compute_activation_probability(self, household_idx: torch.Tensor, decision_type: int,
+                                     features: torch.Tensor, states: torch.Tensor, distances: torch.Tensor,
+                                     network_data, gumbel_samples: Dict[str, torch.Tensor], time: int):
+        """
+        Main activation probability computation - now includes lingering influence.
+        """
+        # First, detect and record any new link breaks
+        self.detect_and_record_link_breaks(network_data, gumbel_samples, time)
+        
+        # Clean up old history entries
+        self.cleanup_expired_history(time)
+        
+        # Compute activation probabilities with lingering influence
+        return self.compute_activation_probability_with_lingering(
+            household_idx, decision_type, features, states, distances,
+            network_data, gumbel_samples, time
+        )
     
     def _batch_get_state_history_excluding_k(self, household_idx: torch.Tensor, decision_type: int,
                                             states: torch.Tensor, time: int, L: int):
@@ -119,33 +326,34 @@ class StateTransition:
         
         return state_hist_flat
     
-    def _precompute_neighbor_relationships(self, household_idx: torch.Tensor, states: torch.Tensor, 
-                                         time: int, decision_type: int, n_households: int):
+    def _precompute_neighbor_relationships(self, household_idx, states, time, decision_type,
+                                       n_households, network_data):
         """
-        OPTIMIZED: Pre-compute all neighbor relationships to avoid repeated searches.
-        
-        Returns:
-            dict with 'all_pairs', 'household_to_pairs_map', 'pair_to_households'
+        Build neighbor lists for each i in the batch, but ONLY over candidate neighbors.
         """
-        # Find all active neighbors for each household in the batch
-        active_state_mask = states[:, time, decision_type] == 1  # [n_households]
-        
+        active_state_mask = states[:, time, decision_type] == 1  # [N]
+        neighbor_index = getattr(network_data, "neighbor_index", None)
+
         all_pairs = []
-        household_to_pairs_map = {}  # household_idx -> list of pair indices
-        pair_to_households = []  # list of (household_batch_idx, neighbor_idx)
-        
+        household_to_pairs_map = {}
+        pair_to_households = []
+
         for batch_idx, hh_i in enumerate(household_idx):
-            hh_i_val = hh_i.item()
+            i = hh_i.item()
             household_to_pairs_map[batch_idx] = []
-            
-            # Find active neighbors for this household
-            for j in range(n_households):
-                if j != hh_i_val and active_state_mask[j]:
-                    pair_idx = len(all_pairs)
-                    all_pairs.append((hh_i_val, j))
-                    household_to_pairs_map[batch_idx].append(pair_idx)
+
+            # candidate neighbors for i
+            candidates = range(n_households) if neighbor_index is None else neighbor_index[i]
+
+            for j in candidates:
+                if j == i:
+                    continue
+                if active_state_mask[j]:
+                    pid = len(all_pairs)
+                    all_pairs.append((i, j))
+                    household_to_pairs_map[batch_idx].append(pid)
                     pair_to_households.append((batch_idx, j))
-        
+
         return {
             'all_pairs': all_pairs,
             'household_to_pairs_map': household_to_pairs_map,
@@ -255,6 +463,20 @@ class StateTransition:
         
         return state_hist_flat
     
+
+    def _get_link_representation(self, i, j, network_data, gumbel_samples, time):
+        """Get continuous link representation."""
+        i, j = min(i, j), max(i, j)
+        
+        if network_data.is_observed(i, j, time) & time<=15:
+            link_type = network_data.get_link_type(i, j, time)
+            link_repr = F.one_hot(torch.tensor(link_type), num_classes=3).float()
+        else:
+            pair_key = f"{i}_{j}_{time}"
+            link_repr = gumbel_samples.get(pair_key, torch.tensor([1.0, 0.0, 0.0]))
+        
+        return link_repr.unsqueeze(0)
+    
     def _aggregate_neighbor_influences(self, influence_probs: torch.Tensor, neighbor_data: dict, 
                                      batch_size: int):
         """
@@ -279,30 +501,24 @@ class StateTransition:
             final_influence_probs[batch_idx] = product_term
         
         return final_influence_probs
-        
-    def _get_link_representation(self, i, j, network_data, gumbel_samples, time):
-        """Get continuous link representation."""
-        i, j = min(i, j), max(i, j)
-        
-        if network_data.is_observed(i, j, time) & time<=15:
-            link_type = network_data.get_link_type(i, j, time)
-            link_repr = F.one_hot(torch.tensor(link_type), num_classes=3).float()
-        else:
-            pair_key = f"{i}_{j}_{time}"
-            link_repr = gumbel_samples.get(pair_key, torch.tensor([1.0, 0.0, 0.0]))
-        
-        return link_repr.unsqueeze(0)
     
 
     def compute_detailed_activation_probability(self, household_idx: torch.Tensor, decision_type: int,
-                                        features: torch.Tensor, states: torch.Tensor, distances: torch.Tensor,
-                                        network_data, gumbel_samples: Dict[str, torch.Tensor], time: int):
+                                features: torch.Tensor, states: torch.Tensor, distances: torch.Tensor,
+                                network_data, gumbel_samples: Dict[str, torch.Tensor], time: int):
         """
-        Detailed version that returns self-activation and neighbor-by-neighbor influence probabilities.
+        Detailed version that returns self-activation, neighbor-by-neighbor influence probabilities,
+        and lingering influence from recently broken links.
         Only used for evaluation, not training.
         """
         batch_size = len(household_idx)
         n_households = features.shape[0]
+        
+        # First, detect and record any new link breaks
+        self.detect_and_record_link_breaks(network_data, gumbel_samples, time)
+        
+        # Clean up old history entries
+        self.cleanup_expired_history(time)
         
         detailed_results = []
         
@@ -320,7 +536,7 @@ class StateTransition:
             
             p_self = self.self_nn(hh_features, state_history_excluding_k, decision_onehot, time_tensor).squeeze().item()
             
-            # 2. NEIGHBOR-BY-NEIGHBOR INFLUENCE PROBABILITIES
+            # 2. CURRENT NEIGHBOR-BY-NEIGHBOR INFLUENCE PROBABILITIES
             active_neighbors = []
             neighbor_influences = []
 
@@ -352,29 +568,116 @@ class StateTransition:
                             'link_type': link_type,
                             'link_probs': link_repr.squeeze().tolist(),
                             'influence_prob': p_inf,
-                            'distance': distances[hh_i_val, j].item()
+                            'distance': distances[hh_i_val, j].item(),
+                            'influence_type': 'current_neighbor'
                         })
 
+            # 3. LINGERING INFLUENCE FROM RECENTLY BROKEN LINKS
+            lingering_influences = []
             
-            # 3. COMPUTE FINAL PROBABILITY STEP BY STEP
+            if hh_i_val in self.broken_links_history:
+                for broken_link in self.broken_links_history[hh_i_val]:
+                    neighbor_j = broken_link['neighbor']
+                    link_type = broken_link['link_type']
+                    break_time = broken_link['break_time']
+                    
+                    time_since_break = time - break_time
+                    if time_since_break >= self.L_linger:
+                        continue  # Too old, no lingering influence
+                    
+                    # Check if the former neighbor is active for this decision type
+                    if states[neighbor_j, time, decision_type] != 1:
+                        continue  # Former neighbor not active, no influence
+                    
+                    # Compute decay weight
+                    decay_weight = self.get_decay_weight(time_since_break)
+                    if decay_weight <= 0:
+                        continue
+                    
+                    # Compute original influence strength (same as active neighbor influence)
+                    # Create dummy link representation for the broken link
+                    link_repr = torch.zeros(1, 3)
+                    link_repr[0, link_type] = 1.0  # One-hot encoding of original link type
+                    
+                    # Get state histories
+                    j_state_hist = get_full_state_history([neighbor_j], states, time, self.L)
+                    i_state_hist = get_state_history_excluding_k([hh_i_val], decision_type, states, time, self.L)
+                    
+                    # Features and distances
+                    feat_i = features[hh_i_val].unsqueeze(0)
+                    feat_j = features[neighbor_j].unsqueeze(0)
+                    dist = distances[hh_i_val, neighbor_j].unsqueeze(0).unsqueeze(1)
+                    
+                    # Compute base influence probability
+                    base_influence_prob = self.influence_nn(
+                        link_repr, j_state_hist, i_state_hist,
+                        feat_i, feat_j, dist, decision_onehot, time_tensor
+                    ).squeeze().item()
+                    
+                    # Apply decay weight
+                    lingering_influence_prob = decay_weight * base_influence_prob
+                    
+                    lingering_influences.append({
+                        'neighbor_id': neighbor_j,
+                        'original_link_type': link_type,
+                        'break_time': break_time,
+                        'time_since_break': time_since_break,
+                        'decay_weight': decay_weight,
+                        'base_influence_prob': base_influence_prob,
+                        'influence_prob': lingering_influence_prob,
+                        'distance': distances[hh_i_val, neighbor_j].item(),
+                        'influence_type': 'lingering'
+                    })
+            
+            # 4. COMPUTE FINAL PROBABILITY STEP BY STEP
+            # Current neighbor social influence term
             if len(neighbor_influences) == 0:
-                final_activation_prob = p_self
-                social_influence_term = 0.0
+                current_neighbor_product = 1.0
+                current_social_influence_term = 0.0
             else:
                 neighbor_probs = [ni['influence_prob'] for ni in neighbor_influences]
-                product_term = torch.prod(torch.tensor([1 - p for p in neighbor_probs])).item()
-                social_influence_term = 1 - product_term
-                final_activation_prob = 1 - (1 - p_self) * product_term
+                current_neighbor_product = torch.prod(torch.tensor([1 - p for p in neighbor_probs])).item()
+                current_social_influence_term = 1 - current_neighbor_product
+            
+            # Lingering influence term
+            if len(lingering_influences) == 0:
+                lingering_product = 1.0
+                lingering_influence_term = 0.0
+            else:
+                lingering_probs = [li['influence_prob'] for li in lingering_influences]
+                lingering_product = torch.prod(torch.tensor([1 - p for p in lingering_probs])).item()
+                lingering_influence_term = 1 - lingering_product
+            
+            # Combined social influence (both current and lingering)
+            total_social_product = current_neighbor_product * lingering_product
+            total_social_influence_term = 1 - total_social_product
+            
+            # Final activation probability using enhanced FR-SIC formula
+            final_activation_prob = 1 - (1 - p_self) * total_social_product
+            
+            # Combine all influences for detailed output
+            all_influences = neighbor_influences + lingering_influences
             
             detailed_results.append({
                 'household_id': hh_i_val,
                 'decision_type': decision_type,
-                'timestep': time,
+                'timestep': time + 1,
                 'self_activation_prob': p_self,
                 'active_neighbors': len(active_neighbors),
                 'neighbor_influences': neighbor_influences,
-                'social_influence_term': social_influence_term,
-                'final_activation_prob': final_activation_prob
+                'lingering_influences': lingering_influences,
+                'all_influences': all_influences,
+                'current_social_influence_term': current_social_influence_term,
+                'lingering_influence_term': lingering_influence_term,
+                'total_social_influence_term': total_social_influence_term,
+                'final_activation_prob': final_activation_prob,
+                'computation_breakdown': {
+                    'p_self': p_self,
+                    'current_neighbor_product': current_neighbor_product,
+                    'lingering_product': lingering_product,
+                    'total_social_product': total_social_product,
+                    'formula': f"1 - (1 - {p_self:.4f}) × {current_neighbor_product:.4f} × {lingering_product:.4f} = {final_activation_prob:.4f}"
+                }
             })
         
         # Return both detailed results and the original activation probabilities

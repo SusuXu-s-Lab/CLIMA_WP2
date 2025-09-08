@@ -59,7 +59,7 @@ def apply_xavier_init(trainer):
 
 
 CONFIG = {
-    'data_dir': 'data/syn_50house_300bri_70bond_alpha0.5_slowgrow', # Directory for synthetic data
+    'data_dir': 'data/syn_data_ruxiao_v3/syn_data1_200node', # Directory for synthetic data
     'models_dir': 'saved_models',
     'logs_dir': 'logs'
 }
@@ -75,7 +75,7 @@ def setup_project():
     print(f"✓ Working directory: {project_root}")
     print(f"✓ Data directory: {CONFIG['data_dir']}")
 
-def generate_or_load_data(data_dir: str = 'data/syn_50house_300bri_70bond_alpha0.5', regenerate: bool = False) -> Dict[str, Any]:
+def generate_or_load_data(data_dir: str = 'data/syn_data_ruxiao_v2', regenerate: bool = False) -> Dict[str, Any]:
     """Generate synthetic data or load existing data."""
     
     print("=== Data Preparation ===")
@@ -83,11 +83,11 @@ def generate_or_load_data(data_dir: str = 'data/syn_50house_300bri_70bond_alpha0
     
     # Check if data files exist
     data_files = [
-        'household_states_community_one_hot.csv',
-        'household_features_community_one_hot.csv', 
-        'household_locations_community_one_hot.csv',
-        'observed_network_community_one_hot.csv',
-        'ground_truth_network_community_one_hot.csv'
+        'household_states_community_one_hot_with_log2.csv',
+        'household_features_community_one_hot_with_log2.csv', 
+        'household_locations_community_one_hot_with_log2.csv',
+        'observed_network_community_one_hot_with_log2.csv',
+        'ground_truth_network_community_one_hot_with_log2.csv'
     ]
     
     data_exists = all((Path(data_dir) / file).exists() for file in data_files)
@@ -128,9 +128,9 @@ def create_models(data: Dict[str, Any], L: int) -> Dict[str, Any]:
     # Create neural networks
     print("Creating neural networks...")
     network_type_nn = NetworkTypeNN(feature_dim=feature_dim, L=L, hidden_dim=128)
-    self_nn = SelfActivationNN(feature_dim=feature_dim, L=L, hidden_dim=64)
-    influence_nn = InfluenceNN(feature_dim=feature_dim, L=L, hidden_dim=64)
-    interaction_nn = InteractionFormationNN(feature_dim=feature_dim, hidden_dim=32)
+    self_nn = SelfActivationNN(feature_dim=feature_dim, L=L, hidden_dim=256)
+    influence_nn = InfluenceNN(feature_dim=feature_dim, L=L, hidden_dim=256)
+    interaction_nn = InteractionFormationNN(feature_dim=feature_dim, hidden_dim=128)
     
     print("✓ Neural networks created")
     
@@ -192,7 +192,10 @@ def create_inference_components(models: Dict[str, Any], L: int, use_sparsity: bo
         gumbel_sampler=gumbel_sampler,
         elbo_computer=elbo_computer,
         learning_rate=TRAINING_CONFIG['learning_rate'],
-        weight_decay=TRAINING_CONFIG['weight_decay']
+        weight_decay=TRAINING_CONFIG['weight_decay'],
+        L_linger=TRAINING_CONFIG['L_linger'],
+        decay_type=TRAINING_CONFIG['decay_type'],
+        decay_rate=TRAINING_CONFIG['decay_rate']
     )
     apply_xavier_init(trainer)
     
@@ -224,7 +227,7 @@ def train_model(data: Dict[str, Any], loader: DataLoader, inference_components: 
     
     if use_mini_batch:
         print(f"Using mini-batch training (network size: {n_households})")
-        batch_size = min(100, n_households // 2)  # Adaptive batch size
+        batch_size = min(n_households, 2*n_households // 2)  # Adaptive batch size   notice!!!!!
         node_batches = loader.create_node_batches(n_households, batch_size=batch_size)
         print(f"✓ Created {len(node_batches)} batches of size ~{batch_size}")
         
@@ -311,7 +314,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     }
     
     # Save complete model
-    model_path = 'saved_models/trained_model_ruxiao_rho50_overfit1_epoch_stage1_400_efficiency1_sparseNet_q128_64_64_32_with_log_seed22.pth' 
+    model_path = 'saved_models/trained_model_ruxiao3_data1_q128_256_256_128_with_log_200node_seed123_small_pos_penalty5_epoch250_topk50.pth' 
     torch.save({
         'model_state': model_state,
         'elbo_params': elbo_params,
@@ -322,7 +325,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     print(f"✓ Model saved to {model_path}")
     
     # Save training history as JSON for analysis
-    history_path = 'logs/training_history_ruxiao_density_rho50_overfit1_epoch_stage1_400_efficiency1_sparseNet_q128_64_64_32_with_log_seed22.json'
+    history_path = 'logs/training_history_ruxiao_ruxiao3_data1_q128_256_256_128_with_log_200node_seed123_small_pos_penalty5_epoch250_topk50.json'
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
     
@@ -381,8 +384,8 @@ def main():
             data=data,
             loader=loader,
             inference_components=inference_components,
-            train_end_time=15,  # Train on timesteps 0-15, test on 16-24
-            max_epochs=500
+            train_end_time=7,  # Train on timesteps 0-15, test on 16-24
+            max_epochs=250
         )
         
         # 6. Save results
@@ -405,8 +408,8 @@ def main():
 
 if __name__ == "__main__":
     # Set random seeds for reproducibility
-    torch.manual_seed(22)
-    np.random.seed(22)
+    torch.manual_seed(123)
+    np.random.seed(123)
 
     # Run main pipeline
     exit_code = main()

@@ -195,19 +195,30 @@ class MeanFieldPosterior:
         
         return torch.stack(marginals_t) if marginals_t else torch.empty(0, 3)
     
-    def _get_batch_pairs(self, node_batch: torch.Tensor, network_data, max_timestep: int, 
-                        n_households: int) -> Dict[int, List[Tuple[int, int]]]:
-        """Get all pairs involving batch nodes for each timestep."""
+    def _get_batch_pairs(self, node_batch: torch.Tensor, network_data, max_timestep: int,
+                     n_households: int):
+        """Return ONLY pairs that both belong to the batch and pass neighbor filter (if present)."""
         batch_pairs_by_time = {t: [] for t in range(max_timestep + 1)}
         batch_nodes_set = set(node_batch.tolist())
-        
+
+        neighbor_index = getattr(network_data, "neighbor_index", None)
+
         for t in range(max_timestep + 1):
-            all_hidden_pairs = network_data.get_hidden_pairs(t)
-            for i, j in all_hidden_pairs:
-                if i in batch_nodes_set or j in batch_nodes_set:
-                    batch_pairs_by_time[t].append((i, j))
-        
+            all_hidden_pairs = network_data.get_hidden_pairs(t)  # existing API
+            if neighbor_index is None:
+                # old behavior
+                for i, j in all_hidden_pairs:
+                    if i in batch_nodes_set or j in batch_nodes_set:
+                        batch_pairs_by_time[t].append((i, j))
+            else:
+                # sparse behavior
+                for i, j in all_hidden_pairs:
+                    if (i in batch_nodes_set) or (j in batch_nodes_set):
+                        if (j in neighbor_index[i]) or (i in neighbor_index[j]):
+                            batch_pairs_by_time[t].append((i, j))
+
         return batch_pairs_by_time
+
     
     # Legacy method for backward compatibility
     def compute_categorical_probabilities_batch(self, *args, **kwargs):
