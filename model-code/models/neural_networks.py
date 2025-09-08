@@ -51,25 +51,33 @@ class NetworkTypeNN(nn.Module):
         return self.network(x)
 
 
-class SelfActivationNN(nn.Module):
-    """NN_self: Input [x_i(t), s_i(t:t-L+1)^{-k}, k, t] - unchanged"""
+# class SelfActivationNN(nn.Module):
+#     """NN_self: Input [x_i(t), s_i(t:t-L+1)^{-k}, k, t] - unchanged"""
     
-    def __init__(self, feature_dim: int, L: int = 1, hidden_dim: int = 64):
-        super().__init__()
-        self.L = L
-        input_dim = feature_dim + L * 2 + 3 + 1
+#     def __init__(self, feature_dim: int, L: int = 1, hidden_dim: int = 64):
+#         super().__init__()
+#         self.L = L
+#         input_dim = feature_dim + L * 2 + 3 + 1
         
-        self.network = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.ReLU(),
-            nn.Linear(hidden_dim // 2, 1)
-        )
+#         # self.network = nn.Sequential(
+#         #     nn.Linear(input_dim, hidden_dim//2),
+#         #     nn.ReLU(),
+#         #     # nn.Linear(hidden_dim, hidden_dim // 2),
+#         #     # nn.ReLU(),
+#         #     nn.Linear(hidden_dim // 2, 1)
+#         # )
+
+#         self.network = nn.Sequential(
+#             nn.Linear(input_dim, hidden_dim),
+#             nn.ReLU(),
+#             nn.Linear(hidden_dim, hidden_dim // 2),
+#             nn.ReLU(),
+#             nn.Linear(hidden_dim // 2, 1)
+#         )
     
-    def forward(self, features, state_history_excluding_k, decision_type_onehot, time):
-        x = torch.cat([features, state_history_excluding_k, decision_type_onehot, time], dim=1)
-        return torch.sigmoid(self.network(x))
+#     def forward(self, features, state_history_excluding_k, decision_type_onehot, time):
+#         x = torch.cat([features, state_history_excluding_k, decision_type_onehot, time], dim=1)
+#         return torch.sigmoid(self.network(x))
 
 
 class InfluenceNN(nn.Module):
@@ -82,14 +90,24 @@ class InfluenceNN(nn.Module):
         input_dim = 3 + L*2 + L*3 + feature_dim + 1 + 3 + 1
         
         self.network = nn.Sequential(
-                nn.Linear(input_dim, hidden_dim),
+                nn.Linear(input_dim, hidden_dim//2),
                 nn.ReLU(),
-                nn.Dropout(0.3),  # 添加这行
-                nn.Linear(hidden_dim, hidden_dim // 2),
-                nn.ReLU(),
-                nn.Dropout(0.2),  # 添加这行
+                # nn.Dropout(0.3),  # 添加这行
+                # nn.Linear(hidden_dim, hidden_dim // 2),
+                # nn.ReLU(),
+                # nn.Dropout(0.2),  # 添加这行
                 nn.Linear(hidden_dim // 2, 1)
             )
+        
+        # self.network = nn.Sequential(
+        #         nn.Linear(input_dim, hidden_dim),
+        #         nn.ReLU(),
+        #         nn.Dropout(0.3),  # 添加这行
+        #         nn.Linear(hidden_dim, hidden_dim // 2),
+        #         nn.ReLU(),
+        #         nn.Dropout(0.2),  # 添加这行
+        #         nn.Linear(hidden_dim // 2, 1)
+        #     )
             
     # def forward(self, link_repr, state_history_j_excluding_k, state_history_i_excluding_k,
     #             features_i, features_j, distances, decision_type_onehot, time):
@@ -123,12 +141,20 @@ class InteractionFormationNN(nn.Module):
         input_dim = feature_dim + 3 + 3 + 1
         
         self.network = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
+            nn.Linear(input_dim, hidden_dim//2),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.ReLU(),
+            # nn.Linear(hidden_dim, hidden_dim // 2),
+            # nn.ReLU(),
             nn.Linear(hidden_dim // 2, 1)
         )
+
+        # self.network = nn.Sequential(
+        #     nn.Linear(input_dim, hidden_dim),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_dim, hidden_dim // 2),
+        #     nn.ReLU(),
+        #     nn.Linear(hidden_dim // 2, 1)
+        # )
     
     def forward(self, features_i, features_j, states_i, states_j, distances):
         f_ij = compute_pairwise_features(features_i, features_j)
@@ -178,6 +204,8 @@ class InteractionFormationNN(nn.Module):
 #         return torch.sigmoid(linear_combination)
 
 
+
+
 class SelfActivationNN(nn.Module):
     """NN_self: Input [x_i(t), s_i(t:t-L+1)^{-k}, k, t] - unchanged"""
     
@@ -186,16 +214,28 @@ class SelfActivationNN(nn.Module):
         self.L = L
         input_dim = feature_dim + L * 2 + 3 + 1
         
+        # self.network = nn.Sequential(
+        #         nn.Linear(input_dim, hidden_dim),
+        #         nn.ReLU(),
+        #         nn.Dropout(0.3),  
+        #         nn.Linear(hidden_dim, hidden_dim // 2),
+        #         nn.ReLU(),
+        #         nn.Dropout(0.2), 
+        #         nn.Linear(hidden_dim // 2, 1))
+
         self.network = nn.Sequential(
-                nn.Linear(input_dim, hidden_dim),
+                nn.Linear(input_dim, hidden_dim//2),
                 nn.ReLU(),
-                nn.Dropout(0.3),  
-                nn.Linear(hidden_dim, hidden_dim // 2),
-                nn.ReLU(),
-                nn.Dropout(0.2), 
-                nn.Linear(hidden_dim // 2, 1))
+                # nn.Dropout(0.3),  
+                # nn.Linear(hidden_dim, hidden_dim // 2),
+                # nn.ReLU(),
+                # nn.Dropout(0.2), 
+                nn.Linear(hidden_dim // 2, 1)
+            )
     
     def forward(self, features, state_history_excluding_k, decision_type_onehot, time):
         x = torch.cat([features, state_history_excluding_k, decision_type_onehot, time], dim=1)
         return torch.sigmoid(self.network(x))
+
+
 

@@ -6,6 +6,7 @@ from tqdm import tqdm
 from .elbo_computation import ELBOComputation
 from .gumbel_softmax import GumbelSoftmaxSampler
 from .variational_posterior import MeanFieldPosterior
+from models.utils import build_neighbor_index_from_distances
 
 
 class NetworkStateTrainer:
@@ -23,11 +24,17 @@ class NetworkStateTrainer:
                  gumbel_sampler: GumbelSoftmaxSampler,
                  elbo_computer: ELBOComputation,
                  learning_rate: float = 1e-3,
-                 weight_decay: float = 1e-4):
+                 weight_decay: float = 1e-4,
+                 L_linger: int = 3,
+                 decay_type: str = 'exponential',
+                 decay_rate: float = 0.5):
         
         self.mean_field_posterior = mean_field_posterior
         self.gumbel_sampler = gumbel_sampler
         self.elbo_computer = elbo_computer
+        self.L_linger = L_linger
+        self.decay_type = decay_type
+        self.decay_rate = decay_rate
         
         # Collect all parameters
         all_params = []
@@ -179,7 +186,7 @@ class NetworkStateTrainer:
         2. Use marginals for sampling
         3. Pass both to ELBO computation
         """
-        if self.epoch >= 300:
+        if self.epoch >= 550:
             for param in self.mean_field_posterior.network_type_nn.parameters():
                 param.requires_grad = False
             for param in self.elbo_computer.network_evolution.parameters():
@@ -194,13 +201,30 @@ class NetworkStateTrainer:
             'total_elbo': 0.0,
             'state_likelihood': 0.0,
             'observation_likelihood': 0.0,
+            'rollout_likelihood': 0.0,
             'prior_likelihood': 0.0,
             'posterior_entropy': 0.0,
             'confidence_regularization': 0.0,
-            'constraint_penalty': 0.0
+            # 'constraint_penalty': 0.0
         }
         
         self.optimizer.zero_grad()
+
+        # # 检查清理前的状态
+        # history_size_before = sum(len(records) for records in self.elbo_computer.state_transition.broken_links_history.values())
+        # print(f"History size before clear: {history_size_before}")
+        # if history_size_before > 0:
+        #     print("Records before clear:")
+        #     for hh, records in self.elbo_computer.state_transition.broken_links_history.items():
+        #         for record in records:
+        #             print(f"  hh={hh}, neighbor={record['neighbor']}, break_time={record['break_time']}")
+        
+        # # 清理
+        # self.elbo_computer.state_transition.broken_links_history.clear()
+        
+        # # 检查清理后的状态
+        # history_size_after = sum(len(records) for records in self.elbo_computer.state_transition.broken_links_history.values())
+        # print(f"History size after clear: {history_size_after}")
         
         # Process each batch
         for batch_idx, node_batch in enumerate(node_batches):
@@ -237,12 +261,15 @@ class NetworkStateTrainer:
                 marginal_probs, temperature, num_samples
             )
             print(f"Gumbel sampling finished for batch {batch_idx + 1}/{len(node_batches)}")
+
+            self.elbo_computer.state_transition.broken_links_history.clear()
             
             # Compute ELBO using BOTH conditional and marginal probabilities
             batch_elbo = self.elbo_computer.compute_elbo_batch(
-                features, states, distances, node_batch, network_data,
-                conditional_probs, marginal_probs, gumbel_samples, max_timestep, lambda_constraint, current_epoch=self.epoch
-            )
+                            features, states, distances, node_batch, network_data,
+                            conditional_probs, marginal_probs, gumbel_samples, max_timestep, 
+                            lambda_constraint, current_epoch=self.epoch
+                        )
             print(f"ELBO computation finished for batch {batch_idx + 1}/{len(node_batches)}")
             
             # Backward pass (accumulate gradients)
@@ -346,6 +373,16 @@ class NetworkStateTrainer:
             if verbose:
                 print(f"Training with mini-batches ({len(node_batches)} batches, "
                     f"avg {n_households / len(node_batches):.1f} households per batch)")
+                
+        # NEW: distance-based neighbor filter!!!!
+        TOP_K = min(50, n_households-1)      # start here; tune later
+        RADIUS = None   # or a float cutoff (same unit as distances)
+        neighbor_index = build_neighbor_index_from_distances(
+            distances, radius=RADIUS, top_k=TOP_K
+        )
+        network_data.neighbor_index = neighbor_index
+        print(f"[Sparse] avg neighbors per node = "
+            f"{sum(len(v) for v in neighbor_index)/len(neighbor_index):.2f}")
 
         progress_bar = tqdm(range(max_epochs), desc="Training") if verbose else range(max_epochs)
 
@@ -365,8 +402,8 @@ class NetworkStateTrainer:
                     max_timestep, max_epochs, lambda_constraint
                 )
             
-            # Only start early stopping after epoch 300 (pure supervised phase)
-            if early_stopping and self.epoch >= 300:
+            # Only start early stopping after epoch 200 (pure supervised phase)
+            if early_stopping and (self.epoch - 1) >= 550:
                 current_state = metrics['state_likelihood']
                 
                 if current_state > best_state_likelihood + 1e-4:
@@ -374,6 +411,10 @@ class NetworkStateTrainer:
                     epochs_no_improve = 0
                 else:
                     epochs_no_improve += 1
+                
+                print(f"Epoch {self.epoch}: State likelihood = {current_state:.4f}, "
+                      f"Best = {best_state_likelihood:.4f}, "
+                      f"No improvement epochs = {epochs_no_improve}")
                 
                 if epochs_no_improve >= patience:
                     if verbose:

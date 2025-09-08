@@ -5,7 +5,7 @@ from .training_loop import NetworkStateTrainer
 # from .elbo_computation_temporal_weighted import ELBOComputationTemporalWeighted
 
 __all__ = [
-    'MeanFieldPosterior', 'GumbelSoftmaxSampler', 'ELBOComputation', 'NetworkStateTrainer'
+    'MeanFieldPosterior', 'GumbelSoftmaxSampler', 'ELBOComputation', 'NetworkStateTrainer', 'ELBOComputationTemporalWeighted'
 ]
 
 # Training configuration
@@ -20,4 +20,7 @@ TRAINING_CONFIG = {
     'max_epochs': 1000,
     'rho_1': 0.5,  # Initial rho_1 for ELBO computation
     'rho_2': 0.5,  # Initial rho_2 for ELBO computation
+    'L_linger': 3,
+    'decay_type': 'exponential',  # 'linear' or 'exponential
+    'decay_rate': 0.5
 }
