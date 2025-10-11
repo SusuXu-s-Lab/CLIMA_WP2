@@ -4,15 +4,16 @@ import pandas as pd
 from pathlib import Path
 from dateutil.relativedelta import relativedelta
 import numpy as np
+import pdb
 
-def identify_group_locations(df, min_appearances=90, night_start_hour=23, night_end_hour=5,
-                            min_group_visits=10, location_precision=4, w1=0.6, w2=0.4):
+def identify_group_locations(df, min_appearances=20, night_start_hour=23, night_end_hour=5,
+                            min_group_visits=5, location_precision=4, w1=0.6, w2=0.4):
     """
     Identify group locations for each device using (primarily) night-time visits.
     If a device has *no* night-time data, its day-time data are used instead.
     """
     result_df = df.copy()
-
+    pdb.set_trace() 
     # --- 1. Preprocessing ----------------------------------------------------------
     if not pd.api.types.is_datetime64_any_dtype(result_df['timestamp_2']):
         result_df['timestamp_2'] = pd.to_datetime(result_df['timestamp_2'])
@@ -195,7 +196,6 @@ def user_group_links(start_date, linked_df):
     # -------------------------------------------------
     # 4. Save the updated mapping for this month
     # -------------------------------------------------
-
 
     result_df_subset.to_csv(f"results/user_group_relation_{start_date.date()}.csv", index=False)
     return result_df_subset, result_df_with_groups
