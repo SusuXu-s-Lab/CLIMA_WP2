@@ -12,7 +12,8 @@ from social_group import *
 from dtw_fun import *
 from network_filtering import *
 from group_network import *
-
+import warnings
+warnings.filterwarnings("ignore")
 
 # Data path
 base_path = 'toy_datasets/toy_datasets/'
@@ -30,7 +31,7 @@ end_time   = pd.Timestamp("2022-12-24 22:00:00")
 
 # Select the location you want
 # somewhere in Maryland, Florida, NYC, Longisland, A small county in the middle of Long Island, Region around Brookhaven and Mastic Beach
-selected_region = 'Lee_county'  
+selected_region = 'maryland'  
 
 '''
 1. Read Data
@@ -43,9 +44,8 @@ filtered_df, min_lat, max_lat, min_lon, max_lon=read_region_data(selected_region
 '''
 2. Filter local resident and residents with minimmun appearance in month
 '''
-filtered_df = apply_residency_filter(filtered_df, min_lat, max_lat, min_lon, max_lon)
 
-linked_df = apply_residency_filter_appear(filtered_df, min_appearances=30)
+linked_df = apply_residency_filter_appear(filtered_df, min_appearances=20)
 
 
 '''
@@ -56,7 +56,7 @@ user_group_df, result_df_with_group=user_group_links(start_date, linked_df)
 '''
 4. Identify Social Links using DTW
 '''
-df_dtw_results=dtw_compute(result_df_with_group,start_time, end_time)
+df_dtw_results=dtw_compute(result_df_with_group,start_time, end_time, min_trj_len = 20)
 
 '''
 5. Network Filtering
