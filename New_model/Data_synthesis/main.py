@@ -13,7 +13,8 @@ warnings.filterwarnings("ignore")
 
 
 # Hyper parameter definition
-alpha=1.3
+x_times = 3    # each household can influence up to x_times other households
+alpha=30
 beta=0.0001
 gamma=0.6
 L=1
@@ -30,13 +31,15 @@ df_ori = df_ori[['home_1', 'home_2', 'home_1_number', 'home_2_number']]
 
 
 # Extract home and their locations
+
 home1 = df_ori[['home_1']].rename(columns={'home_1': 'home'})
 home2 = df_ori[['home_2']].rename(columns={'home_2': 'home'})
 
 # Merge and remove duplicates
 house_df = pd.concat([home1, home2], ignore_index=True).drop_duplicates(subset='home')
 house_df = house_df.dropna()
-house_df=house_df[:200]
+house_df=house_df[-200:]
+
 '''
 Household Feautres Generation
 '''
@@ -81,6 +84,10 @@ p_ji_all_values = []    # Will store all individual p_ji values
 activation_records = []  # Will store all activation records
 
 # ---------------- main simulation loop (t = 0 … T-1) -----------------------
+influence_counter = pd.DataFrame({'home': house_df_with_features['home'], 'count_dim0': 0}).set_index('home')
+influence_counter['count_dim0'] = 0
+influence_counter['count_dim1'] = 0
+influence_counter['count_dim2'] = 0
 for t in tqdm(range(T - 1)):              # we already have states at t, produce t+1
     print(f'--- sim step  {t}  →  {t+1} ---')
 
@@ -163,7 +170,9 @@ for t in tqdm(range(T - 1)):              # we already have states at t, produce
             p_ji,
             link_snapshots[t],                # links at t
             t=t,
-            k=k
+            k=k,
+            influence_counter=influence_counter,
+            x_times=x_times
         )
         
         # Collect activation records
