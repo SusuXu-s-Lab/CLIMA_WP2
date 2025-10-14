@@ -429,5 +429,5 @@ visulize_prob()
 # visualize_p_values_gif()
 
 # Uncomment to create activation distribution GIFs
-create_activation_distribution_gifs()
-create_combined_activation_gif()
+# create_activation_distribution_gifs()
+# create_combined_activation_gif()

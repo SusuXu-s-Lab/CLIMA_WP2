@@ -54,7 +54,7 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
                                 p_ji_df: pd.DataFrame,
                                 links_df: pd.DataFrame,
                                 t: int,
-                                k: int) -> tuple[pd.DataFrame, list]:
+                                k: int, influence_counter: pd.DataFrame, x_times: int) -> tuple[pd.DataFrame, list]:
     """
     Update full_states_df in-place for time t+1, dimension k.
 
@@ -94,7 +94,6 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
     link_m  = links_df.values
     state_k = cur_df[k_col].values        # s_i^k(t)
 
-
     # --- 1. Update each household -------------------------------------------
     for i, h_i in enumerate(homes):
         if k == 1:
@@ -103,10 +102,12 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
             if damage_level == 0:
                 # next_df.at[h_i, k_col] = 0
                 continue
-        other_state_cols = [col for j, col in enumerate(state_cols) if j != k]
-        already_active = cur_df.loc[h_i, other_state_cols].sum() > 0
-        if already_active:
-            continue
+        
+        # each household can only be active in one state dimension
+        # other_state_cols = [col for j, col in enumerate(state_cols) if j != k]
+        # already_active = cur_df.loc[h_i, other_state_cols].sum() > 0
+        # if already_active:
+        #     continue
 
         # (a) irreversible: once active -> remain 1
         if state_k[i] == 1:
@@ -114,7 +115,12 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
             continue
 
         # (b) assemble active neighbours j with s_j^k(t)=1 & link>0
-        neighbours_idx = np.where((link_m[:, i] > 0) & (state_k == 1))[0]
+                # (b) Only consider neighbors that are active AND have not exceeded influence limit
+        valid_influencers_mask = (
+            (state_k == 1) &
+            (influence_counter.loc[homes, f'count_dim{k}'].values < x_times)
+        )
+        neighbours_idx = np.where((link_m[:, i] > 0) & valid_influencers_mask)[0]
 
         if neighbours_idx.size == 0:
             prod_term = 1.0  # No neighbors, so product term is 1
@@ -123,7 +129,7 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
             prod_term = np.prod(1 - p_ji_df.iloc[neighbours_idx, i].values)
             activate_prob = 1 - (1 - p_self_series.loc[h_i]) * prod_term
         
-        activate_prob = np.minimum(activate_prob, 0.8)  # Cap at 0.5
+        activate_prob = np.minimum(activate_prob, 0.8)  # Cap at 0.8
 
 
         # Record the values for analysis
@@ -140,7 +146,6 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
 
         # (c) Probabilistic sampling: activate based on probability
         next_df.at[h_i, k_col] = int(np.random.rand() < activate_prob)
-        # print(f"h_i: {h_i}, activate_prob: {activate_prob}, next_df.at[h_i, k_col]: {next_df.at[h_i, k_col]}")
 
     # --- 2. Write back to full_states_df ------------------------------------
     full_states_df.set_index(['home', 'time'], inplace=True)
@@ -149,5 +154,9 @@ def update_full_states_one_step(house_df_with_features:pd.DataFrame,
     full_states_df.loc[next_df.index, k_col] = next_df[k_col].values
 
     full_states_df.reset_index(inplace=True)
-    return full_states_df, activation_records
 
+    # --- 3. Update influence counters ---------------------------------------
+    active_nodes = [homes[j] for j in np.where(state_k == 1)[0]]
+    influence_counter.loc[active_nodes, f'count_dim{k}'] += 1
+    influence_counter[f'count_dim{k}'] = influence_counter[f'count_dim{k}'].clip(upper=x_times)
+    return full_states_df, activation_records

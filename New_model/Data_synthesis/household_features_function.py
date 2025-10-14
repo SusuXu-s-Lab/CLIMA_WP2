@@ -20,9 +20,13 @@ def compute_similarity(house_df):
     sigma_geo = np.median(geo_dist[np.triu_indices(len(coords_rad), k=1)])
 
     # Step 4: similarity
+    geo_alpha=1.5
     similarity = np.exp(
-        -(demo_dist ** 2 / sigma_demo ** 2 + geo_dist ** 2 / sigma_geo ** 2)
+        -(demo_dist ** 2 / sigma_demo ** 2 + geo_alpha*geo_dist ** 2 / sigma_geo ** 2)
     )
+    similarity /= similarity.sum(axis=1, keepdims=True)
+
+
     return pd.DataFrame(similarity, index=house_df['home'], columns=house_df['home'])
 
 # Example function to compute interaction potential matrix at time t
@@ -51,10 +55,10 @@ def compute_interaction_potential(house_df, state_df, t):
     # Step 4: concatenate full feature vector as [f_ij, s_i, s_j, dist]
     full_feat = np.concatenate([f_ij, s_i, s_j, dist_feat], axis=2)  # (N, N, 10)
     if t==0:
-        weights = np.array([12, 13.0, 6.0,     # f_ij part
+        weights = np.array([11, 8.0, 6.0,     # f_ij part
                             6.5, 7.7, 6.4,     # s_i part
                             7.0, 5.0, 4.2,     # s_j part
-                            -2.0])    # dist_ij
+                            -25.0])    # dist_ij
     else:
         # Add time-varying components to make interaction potential dynamic
         # Create oscillating factors that change over time
@@ -70,7 +74,7 @@ def compute_interaction_potential(house_df, state_df, t):
         base_weights = np.array([0.3, -3, 0.4,        # f_ij part
                                 -0.6, 1.2, -0.2,       # s_i part  
                                 0.3, -2.0, 0.4,       # s_j part
-                                -4.0])                 # dist_ij
+                                -10.0])                 # dist_ij
         
         # Apply time-varying modifications
         weights = base_weights.copy()
