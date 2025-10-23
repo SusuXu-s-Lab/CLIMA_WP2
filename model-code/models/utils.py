@@ -1,6 +1,18 @@
 import torch
 
-
+# def get_state_history_excluding_k(household_idx, decision_k, states, time, L):
+#     """Get state history s_i(t:t-L+1)^{-k} excluding decision type k."""
+#     if isinstance(household_idx, torch.Tensor):
+#         household_idx = household_idx.tolist()
+    
+#     start_time = max(0, time - L + 1)
+#     end_time = time + 1
+    
+#     state_hist = states[household_idx, start_time:end_time, :]
+#     other_decisions = [i for i in range(3) if i != decision_k]
+#     state_hist_excluding_k = state_hist[:, :, other_decisions]
+    
+#     return state_hist_excluding_k.view(len(household_idx), -1)
 
 def get_state_history_excluding_k(household_idx, decision_k, states, time, L):
     """
@@ -22,8 +34,9 @@ def get_state_history_excluding_k(household_idx, decision_k, states, time, L):
     end_time = min(time + 1, states.shape[1])
     
     # Vectorized extraction of state histories
+    # OPTIMIZATION: Detach since these are observed historical states (no gradient needed)
     household_indices = torch.tensor(household_idx_list, dtype=torch.long)
-    state_hist = states[household_indices, start_time:end_time, :]  # [batch_size, time_steps, 3]
+    state_hist = states[household_indices, start_time:end_time, :].detach()  # [batch_size, time_steps, 3]
     
     # Remove decision_k dimension vectorially
     other_decisions = [i for i in range(3) if i != decision_k]
@@ -51,6 +64,8 @@ def get_full_state_history(household_idx, states, time, L):
     """
     OPTIMIZED: Get full state history S_i(t:t-L+1) including all decision types.
     Enhanced with vectorized operations for better performance.
+    
+    Historical states are detached to reduce computational graph complexity.
     """
     if isinstance(household_idx, torch.Tensor):
         if household_idx.numel() == 0:
@@ -67,8 +82,9 @@ def get_full_state_history(household_idx, states, time, L):
     end_time = min(time + 1, states.shape[1])
     
     # Vectorized extraction of state histories
+    # OPTIMIZATION: Detach since these are observed historical states (no gradient needed)
     household_indices = torch.tensor(household_idx_list, dtype=torch.long)
-    state_hist = states[household_indices, start_time:end_time, :]  # [batch_size, time_steps, 3]
+    state_hist = states[household_indices, start_time:end_time, :].detach()  # [batch_size, time_steps, 3]
     
     # Calculate expected length
     expected_length = L * 3  # L timesteps × 3 decision types

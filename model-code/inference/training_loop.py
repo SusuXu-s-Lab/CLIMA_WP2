@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+import numpy as np
 from typing import Dict, List, Optional
 from tqdm import tqdm
 
@@ -50,18 +51,29 @@ class NetworkStateTrainer:
         self.epoch = 0
         self.training_history = []
         
+    # def temperature_schedule(self, epoch: int, max_epochs: int) -> float:
+    #     progress = epoch / max_epochs
+    #     if progress < 0.4:  
+    #         return 2.0
+    #     else:
+    #         return 2.0 * (0.3 / 2.0) ** ((progress - 0.4) / 0.6)
+        
     def temperature_schedule(self, epoch: int, max_epochs: int) -> float:
-        progress = epoch / max_epochs
-        if progress < 0.4:  
+
+        if epoch < 50:
             return 2.0
+        elif epoch < 200:
+            return 1.5
         else:
-            return 2.0 * (0.3 / 2.0) ** ((progress - 0.4) / 0.6)
+            return 1.0
     
     def sample_schedule(self, epoch: int, max_epochs: int) -> int:
-        if epoch < max_epochs * 0.6:
-            return 5 
+        if epoch < 50:
+            return 2  
+        elif epoch < max_epochs * 0.6:
+            return 3 
         else:
-            return 3
+            return 2  
         
 
     def monitor_network_distributions(self, marginal_probs):
@@ -104,52 +116,52 @@ class NetworkStateTrainer:
         print(f"    Dominant Types: No Link {type_pcts[0]:.1f}%, Bonding {type_pcts[1]:.1f}%, Bridging {type_pcts[2]:.1f}%")
 
 
-    def monitor_link_prediction_performance(self, marginal_probs, ground_truth_network, max_timestep):
+    def monitor_link_prediction_performance(self, marginal_probs, ground_truth_network, observed_network, max_timestep):
         """
-        Simple link prediction monitoring - just precision and recall.
-        
+        Simple link prediction monitoring with detailed breakdown.
+
         Args:
             marginal_probs: Dict[str, torch.Tensor] - marginal probabilities from variational posterior
             ground_truth_network: NetworkData object with ground truth
+            observed_network: NetworkData object with partial observations
             max_timestep: int - maximum timestep to evaluate
         
         Returns:
-            Dict with precision, recall metrics
+            Dict with precision, recall and additional diagnostics
         """
         if len(marginal_probs) == 0:
             return {'precision': 0.0, 'recall': 0.0}
         
         predicted_links = 0
-        true_links = 0 
+        true_links = 0
         correct_links = 0
-        
-        processed_pairs = set()  # To avoid double counting
-        
+        correct_observed = 0
+        correct_ever_observed = 0       
+        correct_never_observed = 0     
+
+        processed_pairs = set()
+
         for pair_key, marginal_prob in marginal_probs.items():
             # Parse pair_key: "i_j_t"
             parts = pair_key.split('_')
             if len(parts) != 3:
                 continue
-            
             i, j, t = int(parts[0]), int(parts[1]), int(parts[2])
-            
-            # Skip if already processed this pair at this timestep
+
             pair_id = (min(i, j), max(i, j), t)
-            if pair_id in processed_pairs:
+            if pair_id in processed_pairs or t > max_timestep:
                 continue
             processed_pairs.add(pair_id)
-            
-            # Skip if timestep is out of range
-            if t > max_timestep:
-                continue
-            
+
             # Prediction: 1 if any connection (argmax > 0), 0 if no connection
             predicted_exists = 1 if torch.argmax(marginal_prob).item() > 0 else 0
-            
+
             # Ground truth
             true_link_type = ground_truth_network.get_link_type(i, j, t)
             true_exists = 1 if true_link_type > 0 else 0
-            
+
+            if_observed = observed_network.is_observed(i, j, t)
+
             # Update counters
             if predicted_exists == 1:
                 predicted_links += 1
@@ -157,15 +169,39 @@ class NetworkStateTrainer:
                 true_links += 1
             if predicted_exists == 1 and true_exists == 1:
                 correct_links += 1
-        
+                if if_observed == 1:
+                    correct_observed += 1
+
+                ever_observed = any(
+                    observed_network.is_observed(i, j, τ)
+                    for τ in range(max_timestep + 1)
+                )
+                if ever_observed:
+                    correct_ever_observed += 1
+                else:
+                    correct_never_observed += 1
+
         # Calculate metrics
         precision = correct_links / predicted_links if predicted_links > 0 else 0.0
         recall = correct_links / true_links if true_links > 0 else 0.0
-        
+
+        print(f"\n[Link Prediction Details]")
+        print(f"  Ground truth edges: {true_links}")
+        print(f"  Predicted edges: {predicted_links}")
+        print(f"  Correct predictions: {correct_links}")
+        print(f"  Correct observed predictions (current t): {correct_observed}")
+        print(f"  Correct predictions ever observed before: {correct_ever_observed}")
+        print(f"  Correct predictions never observed before: {correct_never_observed}")
+        print(f"  Precision: {precision:.3f}, Recall: {recall:.3f}")
+
         return {
             'precision': precision,
-            'recall': recall
+            'recall': recall,
+            'correct_observed': correct_observed,
+            'correct_ever_observed': correct_ever_observed,
+            'correct_never_observed': correct_never_observed
         }
+
 
     
     def train_epoch_batched(self,
@@ -194,7 +230,29 @@ class NetworkStateTrainer:
         
         
         temperature = self.temperature_schedule(self.epoch, max_epochs)
+
+        base_tau = self.temperature_schedule(self.epoch, max_epochs)
+        if len(self.training_history) > 0:
+            prev_entropy = float(self.training_history[-1].get('posterior_entropy', 0.08))
+        else:
+            prev_entropy = 0.08
+     
+        if prev_entropy < 0.05:
+            temperature = min(base_tau * 1.4, 2.0)   # 稍加热
+        elif prev_entropy < 0.10:
+            temperature = min(base_tau * 1.2, 1.8)
+        elif prev_entropy > 0.20:
+            temperature = max(base_tau * 0.9, 0.5)   # 稍降温
+       
+        if prev_entropy < 0.05:
+            self.gumbel_sampler.noise_scale = min(getattr(self.gumbel_sampler, 'noise_scale', 1.0) * 1.2, 2.0)
+        elif prev_entropy > 0.20:
+            self.gumbel_sampler.noise_scale = max(getattr(self.gumbel_sampler, 'noise_scale', 1.0) * 0.9, 0.8)
+        else:
+            self.gumbel_sampler.noise_scale = getattr(self.gumbel_sampler, 'noise_scale', 1.0)
+
         num_samples = self.sample_schedule(self.epoch, max_epochs)
+
         
         # Accumulate metrics across batches
         total_metrics = {
@@ -204,27 +262,11 @@ class NetworkStateTrainer:
             'rollout_likelihood': 0.0,
             'prior_likelihood': 0.0,
             'posterior_entropy': 0.0,
-            'confidence_regularization': 0.0,
+            # 'confidence_regularization': 0.0,
             # 'constraint_penalty': 0.0
         }
         
-        self.optimizer.zero_grad()
-
-        # # 检查清理前的状态
-        # history_size_before = sum(len(records) for records in self.elbo_computer.state_transition.broken_links_history.values())
-        # print(f"History size before clear: {history_size_before}")
-        # if history_size_before > 0:
-        #     print("Records before clear:")
-        #     for hh, records in self.elbo_computer.state_transition.broken_links_history.items():
-        #         for record in records:
-        #             print(f"  hh={hh}, neighbor={record['neighbor']}, break_time={record['break_time']}")
-        
-        # # 清理
-        # self.elbo_computer.state_transition.broken_links_history.clear()
-        
-        # # 检查清理后的状态
-        # history_size_after = sum(len(records) for records in self.elbo_computer.state_transition.broken_links_history.values())
-        # print(f"History size after clear: {history_size_after}")
+        self.elbo_computer.state_transition.clear_influence_tracking()
         
         # Process each batch
         for batch_idx, node_batch in enumerate(node_batches):
@@ -237,11 +279,8 @@ class NetworkStateTrainer:
             # Monitor link prediction performance 
             if batch_idx == 0:  # Only check first batch
                 link_metrics = self.monitor_link_prediction_performance(
-                    marginal_probs, ground_truth_network, max_timestep
+                    marginal_probs, ground_truth_network, network_data, max_timestep
                 )
-                print(f"\n=== Epoch {self.epoch} Link inference vs Ground Truth ===")
-                print(f"Link Prediction - Precision: {link_metrics['precision']:.3f}, "
-                    f"Recall: {link_metrics['recall']:.3f}")
 
             if self.epoch < 10 and self.epoch % 1 == 0:
                 print(f"\n=== Epoch {self.epoch} Network Distribution Summary ===")
@@ -284,10 +323,185 @@ class NetworkStateTrainer:
             for key in total_metrics.keys():
                 total_metrics[key] += batch_elbo[key].item()
         
+        del batch_elbo  # 只删除局部变量
+        del conditional_probs
+        del marginal_probs  
+        del gumbel_samples
+        
+        if batch_idx % 2 == 0:
+            import gc
+            gc.collect()
+        
         # Update parameters after all batches
+        self.optimizer.zero_grad()
         batch_loss.backward()
-        total_norm = torch.nn.utils.clip_grad_norm_(self.optimizer.param_groups[0]['params'], float('inf'))
-        print(f"Gradient norm: {total_norm:.6f}")
+
+        # === Gradient diagnostics for PREDICTION networks only ===
+        with torch.no_grad():
+            try:
+                print("\n=== PREDICTION NN DIAGNOSTICS (InfluenceNN & SelfNN) ===")
+                
+                # Helper function to compute gradient and parameter statistics
+                def compute_stats(module, name):
+                    params = list(module.parameters())
+                    if len(params) == 0:
+                        print(f"[{name}] No parameters")
+                        return
+                    
+                    # Gradient statistics
+                    grad_norms = []
+                    for p in params:
+                        if p.grad is not None:
+                            grad_norms.append(p.grad.norm().item())
+                    
+                    if len(grad_norms) > 0:
+                        total_grad_norm = sum(g**2 for g in grad_norms) ** 0.5
+                        max_grad = max(grad_norms)
+                        min_grad = min(grad_norms)
+                        print(f"[{name}] Grad - Total: {total_grad_norm:.6f}, Max: {max_grad:.6f}, Min: {min_grad:.6f}")
+                    else:
+                        print(f"[{name}] Grad - NONE or all zeros")
+                    
+                    # Parameter statistics
+                    param_values = torch.cat([p.flatten() for p in params])
+                    param_mean = param_values.mean().item()
+                    param_std = param_values.std().item()
+                    param_min = param_values.min().item()
+                    param_max = param_values.max().item()
+                    param_absmax = param_values.abs().max().item()
+                    print(f"[{name}] Param - Mean: {param_mean:.6f}, Std: {param_std:.6f}, "
+                          f"Range: [{param_min:.6f}, {param_max:.6f}], AbsMax: {param_absmax:.6f}")
+                
+                # Only diagnose prediction-related NNs
+                compute_stats(self.elbo_computer.state_transition.influence_nn, "InfluenceNN")
+                compute_stats(self.elbo_computer.state_transition.self_nn, "SelfNN")
+                
+                print("=" * 50)
+            except Exception as e:
+                print(f"[GradDiag] Error: {e}")
+        # === End diagnostics ===
+
+
+        # # === 完整诊断 ===
+        # print("\n" + "="*60)
+        # print("GRADIENT DIAGNOSIS")
+        # print("="*60)
+
+        # # 1. 检查参数组数量
+        # print(f"Number of param groups: {len(self.optimizer.param_groups)}")
+        # for i, group in enumerate(self.optimizer.param_groups):
+        #     print(f"  Group {i}: {len(group['params'])} parameters")
+
+        # # 2. 裁剪前 - 计算所有参数组的范数
+        # print("\n--- BEFORE CLIPPING ---")
+        # all_params_list = []
+        # for i, group in enumerate(self.optimizer.param_groups):
+        #     group_params = group['params']
+        #     all_params_list.extend(group_params)
+            
+        #     # 计算这个组的范数
+        #     group_norm = 0.0
+        #     for p in group_params:
+        #         if p.grad is not None:
+        #             group_norm += p.grad.data.norm(2).item() ** 2
+        #     group_norm = group_norm ** 0.5
+        #     print(f"  Group {i} norm: {group_norm:.2f}")
+
+        # # 计算总范数
+        # total_norm_manual = 0.0
+        # for p in all_params_list:
+        #     if p.grad is not None:
+        #         total_norm_manual += p.grad.data.norm(2).item() ** 2
+        # total_norm_manual = total_norm_manual ** 0.5
+        # print(f"  TOTAL norm (manual): {total_norm_manual:.2f}")
+
+        # # 3. 看看哪些参数梯度最大
+        # print("\n--- Top 5 parameters by gradient norm ---")
+        # param_norms = []
+        # model_components = [
+        #     ("NetworkTypeNN", self.mean_field_posterior.network_type_nn),
+        #     ("SelfNN", self.elbo_computer.state_transition.self_nn),
+        #     ("InfluenceNN", self.elbo_computer.state_transition.influence_nn),
+        #     ("InteractionNN", self.elbo_computer.network_evolution.interaction_nn),
+        # ]
+
+        # for component_name, component in model_components:
+        #     for name, param in component.named_parameters():
+        #         if param.grad is not None:
+        #             pnorm = param.grad.norm().item()
+        #             param_norms.append((f"{component_name}.{name}", pnorm, param.shape))
+
+        # param_norms.sort(key=lambda x: x[1], reverse=True)
+        # for name, pnorm, shape in param_norms[:5]:
+        #     print(f"  {name} (shape={shape}): {pnorm:.2f}")
+
+        # # 4. 执行裁剪（只裁剪第一组）
+        # print("\n--- CLIPPING (Group 0 only, max_norm=10.0) ---")
+        # params_group0 = self.optimizer.param_groups[0]['params']
+        # returned_norm = torch.nn.utils.clip_grad_norm_(params_group0, max_norm=10.0)
+        # print(f"  Returned norm: {returned_norm:.2f}")
+
+        # # 5. 裁剪后 - 重新计算范数
+        # print("\n--- AFTER CLIPPING ---")
+        # for i, group in enumerate(self.optimizer.param_groups):
+        #     group_params = group['params']
+        #     group_norm = 0.0
+        #     for p in group_params:
+        #         if p.grad is not None:
+        #             group_norm += p.grad.data.norm(2).item() ** 2
+        #     group_norm = group_norm ** 0.5
+        #     print(f"  Group {i} norm: {group_norm:.2f}")
+
+        # # 重新计算总范数
+        # total_norm_after = 0.0
+        # for p in all_params_list:
+        #     if p.grad is not None:
+        #         total_norm_after += p.grad.data.norm(2).item() ** 2
+        # total_norm_after = total_norm_after ** 0.5
+        # print(f"  TOTAL norm (after): {total_norm_after:.2f}")
+
+        # # 6. 判断
+        # print("\n--- ANALYSIS ---")
+        # if len(self.optimizer.param_groups) > 1:
+        #     print(f"⚠️  You have {len(self.optimizer.param_groups)} param groups!")
+        #     print(f"⚠️  You're only clipping group 0, other groups are NOT clipped!")
+        #     print(f"⚠️  This is why total norm is still large!")
+        # elif returned_norm > 10.1:
+        #     print("⚠️  WARNING: Clipping didn't work even for group 0!")
+        # else:
+        #     print("✓ Clipping worked correctly")
+
+        # print("="*60 + "\n")
+
+
+
+        # total_norm = torch.nn.utils.clip_grad_norm_(self.optimizer.param_groups[0]['params'], max_norm=10.0)
+        # print(f"Gradient norm: {total_norm:.6f}")
+
+        print("\n=== IMMEDIATE TEST ===")
+        print(f"Number of param groups: {len(self.optimizer.param_groups)}")
+
+        # 不裁剪，只查看
+        test_norm = torch.nn.utils.clip_grad_norm_(
+            self.optimizer.param_groups[0]['params'], 
+            max_norm=float('inf')  # 不裁剪，只返回范数
+        )
+        print(f"Original norm (no clipping): {test_norm:.2f}")
+
+    
+        clipped_norm = torch.nn.utils.clip_grad_norm_(
+            self.optimizer.param_groups[0]['params'], 
+            max_norm=50.0
+        )
+        print(f"After clipping to 50.0: {clipped_norm:.2f}")
+
+        verify_norm = torch.nn.utils.clip_grad_norm_(
+            self.optimizer.param_groups[0]['params'], 
+            max_norm=float('inf')
+        )
+        print(f"Verify after clipping: {verify_norm:.2f}")
+        print("===================\n")
+
         self.optimizer.step()
         print(f"Backward pass finished")
         
@@ -402,8 +616,7 @@ class NetworkStateTrainer:
                     max_timestep, max_epochs, lambda_constraint
                 )
             
-            # Only start early stopping after epoch 200 (pure supervised phase)
-            if early_stopping and (self.epoch - 1) >= 550:
+            if early_stopping and (self.epoch - 1) >= 650:
                 current_state = metrics['state_likelihood']
                 
                 if current_state > best_state_likelihood + 1e-4:

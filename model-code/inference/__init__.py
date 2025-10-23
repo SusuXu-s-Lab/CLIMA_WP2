@@ -2,10 +2,9 @@ from .variational_posterior import MeanFieldPosterior
 from .gumbel_softmax import GumbelSoftmaxSampler
 from .elbo_computation import ELBOComputation
 from .training_loop import NetworkStateTrainer
-# from .elbo_computation_temporal_weighted import ELBOComputationTemporalWeighted
 
 __all__ = [
-    'MeanFieldPosterior', 'GumbelSoftmaxSampler', 'ELBOComputation', 'NetworkStateTrainer', 'ELBOComputationTemporalWeighted'
+    'MeanFieldPosterior', 'GumbelSoftmaxSampler', 'ELBOComputation', 'NetworkStateTrainer'
 ]
 
 # Training configuration
@@ -22,5 +21,6 @@ TRAINING_CONFIG = {
     'rho_2': 0.5,  # Initial rho_2 for ELBO computation
     'L_linger': 3,
     'decay_type': 'exponential',  # 'linear' or 'exponential
-    'decay_rate': 0.5
+    'decay_rate': 0.5,
+    'max_neighbor_influences': 5  # FIXED: Was 100, causing train-eval inconsistency
 }

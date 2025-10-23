@@ -9,17 +9,18 @@ class GumbelSoftmaxSampler:
     Key change: Use marginal probabilities π̄_ij(t) as "logits" for sampling,
     instead of conditional probabilities.
     """
+
+    def __init__(self):
+        self.noise_scale = 1.0   
     
-    @staticmethod
-    def sample_gumbel(shape: torch.Size, device: str = 'cpu') -> torch.Tensor:
+    def sample_gumbel(self, shape: torch.Size, device: str = 'cpu') -> torch.Tensor:
         """Sample from Gumbel(0,1) distribution."""
         uniform = torch.rand(shape, device=device)
-        return -torch.log(-torch.log(uniform + 1e-8) + 1e-8)
-    
-    @staticmethod
-    def gumbel_softmax(logits: torch.Tensor, temperature: float) -> torch.Tensor:
+        return -self.noise_scale * torch.log(-torch.log(uniform + 1e-8) + 1e-8) 
+
+    def gumbel_softmax(self, logits: torch.Tensor, temperature: float) -> torch.Tensor:
         """Apply Gumbel-Softmax sampling."""
-        gumbel_noise = GumbelSoftmaxSampler.sample_gumbel(logits.shape, device=logits.device)
+        gumbel_noise = self.sample_gumbel(logits.shape, device=logits.device)
         return F.softmax((logits + gumbel_noise) / temperature, dim=-1)
     
     def sample_hidden_links_batch(self, 

@@ -59,58 +59,29 @@ class NetworkEvolution(nn.Module):
         """Interaction potential using f_ij = |features_i - features_j|"""
         return self.interaction_nn(features_i, features_j, states_i, states_j, distances)
     
-    def transition_probabilities(self, prev_link_type, features_i, features_j, 
-                               states_i, states_j, distances):
+    def get_static_transition_probs(self, states_i_t, states_j_t) -> torch.Tensor:
         """
-        MODIFIED: Transition probabilities for t≥1 aligned with PDF formulation
-        
-        Key changes:
-        1. NO new link formation (prevent 0→1 and 0→2 transitions)
-        2. Deterministic bridging link breaking when endpoints become vacant
-        3. Bonding links remain completely persistent
-        
-        Note: This function is only called for t≥1. t=0 uses initial_probabilities().
+        Get static transition probability matrix [3, 3].
+        Only depends on whether either household is vacant.
         """
-        batch_size = prev_link_type.shape[0]
+        trans = torch.zeros(3, 3)
         
-        trans_probs = torch.zeros((batch_size, 3, 3))
+        # No link: stays no link
+        trans[0, 0] = 1.0 - 2e-8
+        trans[0, 1:] = 1e-8
         
-        # Check vacancy status
-        vacant_i = states_i[:, 0:1]  # [batch_size, 1]
-        vacant_j = states_j[:, 0:1]  # [batch_size, 1]
-        either_vacant = (vacant_i + vacant_j).clamp(0, 1)  # 1 if either is vacant
+        # Bonding: persists forever
+        trans[1, 1] = 1.0 - 2e-8
+        trans[1, [0, 2]] = 1e-8
         
-        # From no connection (ℓ_ij(t-1) = 0) - NO NEW LINK FORMATION for t≥1
-        trans_probs[:, 0, 0] = 1.0 - 2e-8  # Stay as no connection
-        trans_probs[:, 0, 1] = 1e-8        # No new bonding formation
-        trans_probs[:, 0, 2] = 1e-8        # No new bridging formation
+        # Bridging: breaks if either vacant, else persists
+        either_vacant = (states_i_t[0] + states_j_t[0]).clamp(0, 1)
+        if either_vacant > 0.5:
+            trans[2, :] = torch.tensor([1.0 - 2e-8, 1e-8, 1e-8])  # Break
+        else:
+            trans[2, :] = torch.tensor([1e-8, 1e-8, 1.0 - 2e-8])  # Persist
         
-        # From bonding (ℓ_ij(t-1) = 1) - NEVER disappear (PDF constraint)
-        trans_probs[:, 1, 0] = 1e-8
-        trans_probs[:, 1, 1] = 1.0 - 2e-8  # Always persist
-        trans_probs[:, 1, 2] = 1e-8
-        
-        # From bridging (ℓ_ij(t-1) = 2) - DETERMINISTIC breaking when vacant
-        # PDF: bridging links disappear deterministically when one endpoint moves out
-        trans_probs[:, 2, 0] = torch.where(
-            either_vacant.squeeze(1) > 0.5,
-            1.0 - 1e-8,  # If either vacant: break with near certainty
-            1e-8  # Otherwise: very small break probability
-        )
-        
-        trans_probs[:, 2, 1] = 1e-8  # Never become bonding
-        
-        trans_probs[:, 2, 2] = torch.where(
-            either_vacant.squeeze(1) > 0.5,
-            1e-8,  # If either vacant: very small stay probability
-            1.0 - 2e-8  # Otherwise: persist with near certainty
-        )
-
-        # Ensure probabilities sum to 1
-        row_sums = trans_probs.sum(dim=2, keepdim=True)
-        trans_probs = trans_probs / row_sums
-        
-        return trans_probs
+        return trans
     
     def initial_probabilities(self, features_i, features_j, distances):
         """Initial probabilities at t=0 - UNCHANGED (already correct as prior)"""

@@ -10,7 +10,8 @@ class StateTransition:
     """State transition with FR-SIC process and lingering influence support"""
     
     def __init__(self, self_nn: SelfActivationNN, influence_nn: InfluenceNN, L: int = 1,
-                 L_linger: int = 3, decay_type: str = 'exponential', decay_rate: float = 0.5):
+                 L_linger: int = 3, decay_type: str = 'exponential', decay_rate: float = 0.5,
+                 max_neighbor_influences: int = 10):
         self.self_nn = self_nn
         self.influence_nn = influence_nn
         self.L = L
@@ -23,13 +24,40 @@ class StateTransition:
         # NEW: Link break history tracking
         # Structure: {household_i: [{'neighbor': j, 'link_type': 2, 'break_time': t}, ...]}
         self.broken_links_history = defaultdict(list)
+
+        # NEW: Influence usage tracking
+        # Structure: {(active_household, target_household, decision_type): usage_count}
+        self.max_neighbor_influences = max_neighbor_influences
+        self.influence_usage_history = defaultdict(int)
+        # self.influence_stats = {
+        # 'total_attempts': 0,
+        # 'blocked_attempts': 0,
+        # 'current_timestep': -1
+        # }
+    
+    def _compute_inactive_fraction(self, states: torch.Tensor, time: int, decision_type: int) -> float:
+        """
+        Compute fraction of population still inactive for given decision type at time t.
+        This is non-leaking: only uses current and past information.
+        
+        Args:
+            states: [N, T, 3] - state tensor
+            time: current timestep
+            decision_type: 0 (vacant), 1 (repair), 2 (sell)
+        
+        Returns:
+            fraction: float in [0, 1] - fraction of population inactive at time t
+        """
+        total_population = states.shape[0]
+        current_inactive = torch.sum(states[:, time, decision_type] == 0).item()
+        inactive_fraction = current_inactive / total_population
+        return inactive_fraction
         
     def add_broken_link(self, household_i: int, household_j: int, link_type: int, break_time: int):
         """Record a broken link for both households"""
         # Add to both households' history (since links are bidirectional)
 
         # print(f"ADDING BROKEN LINK: {household_i}-{household_j}, break_time={break_time}")
-        # # 打印调用栈
         # import traceback
         # traceback.print_stack()
 
@@ -76,8 +104,7 @@ class StateTransition:
             exponent = -self.decay_rate * time_since_break
             # print(f"DEBUG: exponent={exponent}")
             
-            # 安全检查
-            if exponent > 5.0:  # 如果指数太大，说明有问题
+            if exponent > 5.0:  
                 print(f"WARNING: Exponent too large: {exponent}, clamping to 0.0")
                 return 0.0
                 
@@ -198,10 +225,15 @@ class StateTransition:
                 decision_onehot = F.one_hot(torch.tensor(decision_type), num_classes=3).float().unsqueeze(0)
                 time_tensor = torch.full((1, 1), time, dtype=torch.float32)
                 
-                # Compute base influence probability
+                # Inactive fraction for enhanced features
+                inactive_frac = self._compute_inactive_fraction(states, time, decision_type)
+                inactive_frac_tensor = torch.full((1, 1), inactive_frac, dtype=torch.float32)
+                
+                # Compute base influence probability with enhanced features
                 base_influence_prob = self.influence_nn(
                     link_repr, j_state_hist, i_state_hist,
-                    feat_i, feat_j, dist, decision_onehot, time_tensor
+                    feat_i, feat_j, dist, decision_onehot, time_tensor,
+                    inactive_fraction=inactive_frac_tensor
                 ).squeeze().item()
                 
                 # Apply decay weight
@@ -220,22 +252,57 @@ class StateTransition:
         
         return lingering_influence_probs
     
+    def clear_influence_tracking(self):
+        """Clear influence tracking at start of new simulation/evaluation"""
+        self.influence_usage_history.clear()
+
+    def can_influence(self, active_household: int, target_household: int, decision_type: int) -> bool:
+        """Check if active household can still influence target for this decision type"""
+        key = (active_household, target_household, decision_type)
+        can_do = self.influence_usage_history[key] < self.max_neighbor_influences
+    
+        # if not can_do:
+        #     self.influence_stats['blocked_attempts'] += 1
+        
+        return can_do
+
+    def record_influence_attempt(self, active_household: int, target_household: int, decision_type: int):
+        """Record that an influence attempt occurred"""
+        key = (active_household, target_household, decision_type)
+        self.influence_usage_history[key] += 1
+        # self.influence_stats['total_attempts'] += 1
+
+    def print_influence_stats(self, timestep: int):
+        if timestep != self.influence_stats['current_timestep']:
+            if self.influence_stats['total_attempts'] > 0:
+                blocked_rate = self.influence_stats['blocked_attempts'] / self.influence_stats['total_attempts']
+                print(f"t={timestep}: Total={self.influence_stats['total_attempts']}, "
+                    f"Blocked={self.influence_stats['blocked_attempts']}, "
+                    f"Rate={blocked_rate:.3f}")
+            self.influence_stats['current_timestep'] = timestep
+    
     def compute_activation_probability_with_lingering(self, household_idx: torch.Tensor, decision_type: int,
                                                 features: torch.Tensor, states: torch.Tensor, 
                                                 distances: torch.Tensor, network_data,
-                                                gumbel_samples: Dict[str, torch.Tensor], time: int):
+                                                gumbel_samples: Dict[str, torch.Tensor], time: int,
+                                                return_components: bool = False):
         """
         Enhanced FR-SIC process with lingering influence from broken links.
         
         Modified FR-SIC formula:
         P(activate) = 1 - (1 - p_self) × (1 - p_current_neighbors) × (1 - p_lingering_influence)
+        
+        Args:
+            return_components: If True, return dict with probability components for diagnostic
         """
         batch_size = len(household_idx)
         
         if batch_size == 0:
+            if return_components:
+                return torch.tensor([]), {}
             return torch.tensor([])
         
-        # Step 1: Compute self-activation (unchanged)
+        # Step 1: Compute self-activation with enhanced features
         hh_features = features[household_idx]
         state_history_excluding_k = self._batch_get_state_history_excluding_k(
             household_idx, decision_type, states, time, self.L
@@ -245,8 +312,14 @@ class StateTransition:
         decision_onehot_batch = decision_onehot.unsqueeze(0).expand(batch_size, -1)
         time_tensor_batch = torch.full((batch_size, 1), time, dtype=torch.float32)
         
+        # Compute inactive fraction (population saturation info)
+        inactive_frac = self._compute_inactive_fraction(states, time, decision_type)
+        inactive_frac_batch = torch.full((batch_size, 1), inactive_frac, dtype=torch.float32)
+        
+        # Call self_nn with enhanced features (will use them if use_enhanced_features=True)
         p_self = self.self_nn(hh_features, state_history_excluding_k, 
-                             decision_onehot_batch, time_tensor_batch).squeeze(1)
+                             decision_onehot_batch, time_tensor_batch, 
+                             inactive_fraction=inactive_frac_batch).squeeze(1)
         
         # Step 2: Compute current neighbor influence (existing logic)
         neighbor_data = self._precompute_neighbor_relationships(
@@ -272,25 +345,42 @@ class StateTransition:
         # P(activate) = 1 - (1 - p_self) × current_neighbor_product × lingering_product
         activation_probs = 1 - (1 - p_self) * current_neighbor_influence_probs * lingering_influence_probs
         
+        if return_components:
+            components = {
+                'p_self': p_self,
+                'current_neighbor_product': current_neighbor_influence_probs,
+                'lingering_product': lingering_influence_probs,
+                'final_probs': activation_probs,
+                'num_active_neighbors': torch.tensor([len(neighbor_data['all_pairs'])], dtype=torch.float32)
+            }
+            return activation_probs, components
+        
         return activation_probs
     
     # Update the main compute_activation_probability method to use the new enhanced version
     def compute_activation_probability(self, household_idx: torch.Tensor, decision_type: int,
                                      features: torch.Tensor, states: torch.Tensor, distances: torch.Tensor,
-                                     network_data, gumbel_samples: Dict[str, torch.Tensor], time: int):
+                                     network_data, gumbel_samples: Dict[str, torch.Tensor], time: int,
+                                     return_components: bool = False):
         """
         Main activation probability computation - now includes lingering influence.
+        
+        Args:
+            return_components: If True, return (probs, components_dict) for diagnostic
         """
         # First, detect and record any new link breaks
         self.detect_and_record_link_breaks(network_data, gumbel_samples, time)
         
         # Clean up old history entries
         self.cleanup_expired_history(time)
+
+        # if time % 2 == 0:
+        #     self.print_influence_stats(time)
         
         # Compute activation probabilities with lingering influence
         return self.compute_activation_probability_with_lingering(
             household_idx, decision_type, features, states, distances,
-            network_data, gumbel_samples, time
+            network_data, gumbel_samples, time, return_components=return_components
         )
     
     def _batch_get_state_history_excluding_k(self, household_idx: torch.Tensor, decision_type: int,
@@ -303,7 +393,9 @@ class StateTransition:
         end_time = min(time + 1, states.shape[1])
         
         # Batch extract state histories
-        state_hist = states[household_idx, start_time:end_time, :]  # [batch_size, time_steps, 3]
+        # OPTIMIZATION: Detach historical states (they are observed data, no gradient needed)
+        # This significantly reduces computational graph complexity for backward pass
+        state_hist = states[household_idx, start_time:end_time, :].detach()  # [batch_size, time_steps, 3]
         
         # Remove decision_type dimension
         other_decisions = [i for i in range(3) if i != decision_type]
@@ -349,10 +441,11 @@ class StateTransition:
                 if j == i:
                     continue
                 if active_state_mask[j]:
-                    pid = len(all_pairs)
-                    all_pairs.append((i, j))
-                    household_to_pairs_map[batch_idx].append(pid)
-                    pair_to_households.append((batch_idx, j))
+                    if self.can_influence(j, i, decision_type):
+                        pid = len(all_pairs)
+                        all_pairs.append((i, j))
+                        household_to_pairs_map[batch_idx].append(pid)
+                        pair_to_households.append((batch_idx, j))
 
         return {
             'all_pairs': all_pairs,
@@ -425,12 +518,32 @@ class StateTransition:
         decision_onehot_batch = decision_onehot_tensor.unsqueeze(0).expand(n_pairs, -1)
         time_tensor_batch = torch.full((n_pairs, 1), time, dtype=torch.float32)
         
-        # Single batch call to influence neural network
+        # Compute inactive fraction for enhanced features
+        inactive_frac = self._compute_inactive_fraction(states, time, decision_type)
+        inactive_frac_batch = torch.full((n_pairs, 1), inactive_frac, dtype=torch.float32)
+        
+        # Single batch call to influence neural network with enhanced features
         influence_probs = self.influence_nn(
             link_reprs_tensor, j_state_hists_tensor, i_state_hists_tensor,
             feat_i_tensor, feat_j_tensor, distances_tensor,
-            decision_onehot_batch, time_tensor_batch
+            decision_onehot_batch, time_tensor_batch,
+            inactive_fraction=inactive_frac_batch  # Enhanced feature
         ).squeeze(1)
+
+        # ❌ DISABLED: Normalize by sqrt(n) - was preventing neighbor influence from accumulating
+        # This normalization was too aggressive and made neighbor influence negligible
+        # n_neighbors = len(influence_probs)
+        # if n_neighbors > 1:
+        #     scale_factor = 1.0 / torch.sqrt(torch.tensor(float(n_neighbors)))
+        #     influence_probs = influence_probs * scale_factor
+
+        # NEW: Record influence attempts for computed influences
+        all_pairs = neighbor_data['all_pairs']
+        pair_to_households = neighbor_data['pair_to_households']
+        
+        for pair_idx, ((hh_i, j), (batch_idx, _)) in enumerate(zip(all_pairs, pair_to_households)):
+            # Record that j (active) attempted to influence hh_i (target)
+            self.record_influence_attempt(j, hh_i, decision_type)
         
         return influence_probs
     
@@ -444,7 +557,8 @@ class StateTransition:
         end_time = min(time + 1, states.shape[1])
         
         # Batch extract state histories
-        state_hist = states[household_idx, start_time:end_time, :]  # [batch_size, time_steps, 3]
+        # OPTIMIZATION: Detach historical states (observed data, no gradient needed)
+        state_hist = states[household_idx, start_time:end_time, :].detach()  # [batch_size, time_steps, 3]
         
         # Calculate expected length
         expected_length = L * 3  # L timesteps × 3 decision types
@@ -495,17 +609,23 @@ class StateTransition:
             
             # Get influence probabilities for this household's neighbors
             neighbor_probs = influence_probs[pair_indices]
+
+            n_neighbors = len(neighbor_probs)
+            # if n_neighbors > 1:
+            #     decay_factor = 1.0 / torch.sqrt(torch.tensor(float(n_neighbors)))
+            #     neighbor_probs = neighbor_probs * decay_factor 
+
             
             # Compute product term: ∏(1 - p_inf)
-            product_term = torch.prod(1 - neighbor_probs)
+            log_term = torch.sum(torch.log1p(-neighbor_probs.clamp(0, 1-1e-8)))
+            product_term = torch.exp(log_term)
             final_influence_probs[batch_idx] = product_term
         
         return final_influence_probs
     
-
     def compute_detailed_activation_probability(self, household_idx: torch.Tensor, decision_type: int,
-                                features: torch.Tensor, states: torch.Tensor, distances: torch.Tensor,
-                                network_data, gumbel_samples: Dict[str, torch.Tensor], time: int):
+                                    features: torch.Tensor, states: torch.Tensor, distances: torch.Tensor,
+                                    network_data, gumbel_samples: Dict[str, torch.Tensor], time: int):
         """
         Detailed version that returns self-activation, neighbor-by-neighbor influence probabilities,
         and lingering influence from recently broken links.
@@ -534,7 +654,12 @@ class StateTransition:
             decision_onehot = F.one_hot(torch.tensor(decision_type), num_classes=3).float().unsqueeze(0)
             time_tensor = torch.full((1, 1), time, dtype=torch.float32)
             
-            p_self = self.self_nn(hh_features, state_history_excluding_k, decision_onehot, time_tensor).squeeze().item()
+            # Compute inactive fraction for enhanced features
+            inactive_frac = self._compute_inactive_fraction(states, time, decision_type)
+            inactive_frac_tensor = torch.full((1, 1), inactive_frac, dtype=torch.float32)
+            
+            p_self = self.self_nn(hh_features, state_history_excluding_k, decision_onehot, time_tensor,
+                                 inactive_fraction=inactive_frac_tensor).squeeze().item()
             
             # 2. CURRENT NEIGHBOR-BY-NEIGHBOR INFLUENCE PROBABILITIES
             active_neighbors = []
@@ -551,26 +676,30 @@ class StateTransition:
                 if link_type > 0:  # Has connection
                     # Then check if neighbor is active
                     if states[j, time, decision_type] == 1:  # Neighbor is active
-                        # Calculate influence probability
-                        active_neighbors.append(j)
-                        j_state_hist = get_full_state_history([j], states, time, self.L)
-                        i_state_hist = get_state_history_excluding_k([hh_i_val], decision_type, states, time, self.L)
-                        
-                        feat_i = features[hh_i_val].unsqueeze(0)
-                        feat_j = features[j].unsqueeze(0)
-                        dist = distances[hh_i_val, j].unsqueeze(0).unsqueeze(1)
-                        
-                        p_inf = self.influence_nn(link_repr, j_state_hist, i_state_hist, 
-                                                feat_i, feat_j, dist, decision_onehot, time_tensor).squeeze().item()
-                        
-                        neighbor_influences.append({
-                            'neighbor_id': j,
-                            'link_type': link_type,
-                            'link_probs': link_repr.squeeze().tolist(),
-                            'influence_prob': p_inf,
-                            'distance': distances[hh_i_val, j].item(),
-                            'influence_type': 'current_neighbor'
-                        })
+                        if self.can_influence(j, hh_i_val, decision_type):
+                            # Calculate influence probability
+                            active_neighbors.append(j)
+                            j_state_hist = get_full_state_history([j], states, time, self.L)
+                            i_state_hist = get_state_history_excluding_k([hh_i_val], decision_type, states, time, self.L)
+                            
+                            feat_i = features[hh_i_val].unsqueeze(0)
+                            feat_j = features[j].unsqueeze(0)
+                            dist = distances[hh_i_val, j].unsqueeze(0).unsqueeze(1)
+                            
+                            p_inf = self.influence_nn(link_repr, j_state_hist, i_state_hist, 
+                                                    feat_i, feat_j, dist, decision_onehot, time_tensor,
+                                                    inactive_fraction=inactive_frac_tensor).squeeze().item()
+                            
+                            
+                            self.record_influence_attempt(j, hh_i_val, decision_type)
+                            neighbor_influences.append({
+                                'neighbor_id': j,
+                                'link_type': link_type,
+                                'link_probs': link_repr.squeeze().tolist(),
+                                'influence_prob': p_inf,
+                                'distance': distances[hh_i_val, j].item(),
+                                'influence_type': 'current_neighbor'
+                            })
 
             # 3. LINGERING INFLUENCE FROM RECENTLY BROKEN LINKS
             lingering_influences = []
@@ -608,10 +737,11 @@ class StateTransition:
                     feat_j = features[neighbor_j].unsqueeze(0)
                     dist = distances[hh_i_val, neighbor_j].unsqueeze(0).unsqueeze(1)
                     
-                    # Compute base influence probability
+                    # Compute base influence probability with enhanced features
                     base_influence_prob = self.influence_nn(
                         link_repr, j_state_hist, i_state_hist,
-                        feat_i, feat_j, dist, decision_onehot, time_tensor
+                        feat_i, feat_j, dist, decision_onehot, time_tensor,
+                        inactive_fraction=inactive_frac_tensor
                     ).squeeze().item()
                     
                     # Apply decay weight

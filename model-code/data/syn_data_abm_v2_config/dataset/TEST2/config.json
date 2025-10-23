@@ -1,0 +1,37 @@
+{
+  "name": "TEST2",
+  "description": "Dense network with high seeding - Only temporal missing",
+  "role_distribution": {
+    "early_adopter_ratio": 0.05,
+    "social_follower_ratio": 0.25,
+    "resistant_ratio": 0.5,
+    "isolated_ratio": 0.2
+  },
+  "network_density": {
+    "target_avg_degree": 2.5,
+    "target_bonding_ratio": 0.25
+  },
+  "decision_seeding": {
+    "target_seed_ratio": 0.05,
+    "repair_seed_ratio": 0.6,
+    "vacant_seed_ratio": 0.3,
+    "sell_seed_ratio": 0.1
+  },
+  "simulation_parameters": {
+    "n_households": 200,
+    "n_timesteps": 24,
+    "random_seed": 986
+  },
+  "missing_mechanisms": {
+    "structural_missing": {
+      "rho_bonding": 0.0,
+      "rho_bridging": 0.0,
+      "description": "Edges permanently unobservable across all time steps"
+    },
+    "temporal_missing": {
+      "rho_bonding": 0.5,
+      "rho_bridging": 0.5,
+      "description": "Random time point records missing for observable edges"
+    }
+  }
+}

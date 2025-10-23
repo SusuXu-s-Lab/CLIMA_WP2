@@ -51,84 +51,124 @@ class NetworkTypeNN(nn.Module):
         return self.network(x)
 
 
-# class SelfActivationNN(nn.Module):
-#     """NN_self: Input [x_i(t), s_i(t:t-L+1)^{-k}, k, t] - unchanged"""
-    
-#     def __init__(self, feature_dim: int, L: int = 1, hidden_dim: int = 64):
-#         super().__init__()
-#         self.L = L
-#         input_dim = feature_dim + L * 2 + 3 + 1
-        
-#         # self.network = nn.Sequential(
-#         #     nn.Linear(input_dim, hidden_dim//2),
-#         #     nn.ReLU(),
-#         #     # nn.Linear(hidden_dim, hidden_dim // 2),
-#         #     # nn.ReLU(),
-#         #     nn.Linear(hidden_dim // 2, 1)
-#         # )
-
-#         self.network = nn.Sequential(
-#             nn.Linear(input_dim, hidden_dim),
-#             nn.ReLU(),
-#             nn.Linear(hidden_dim, hidden_dim // 2),
-#             nn.ReLU(),
-#             nn.Linear(hidden_dim // 2, 1)
-#         )
-    
-#     def forward(self, features, state_history_excluding_k, decision_type_onehot, time):
-#         x = torch.cat([features, state_history_excluding_k, decision_type_onehot, time], dim=1)
-#         return torch.sigmoid(self.network(x))
-
 
 class InfluenceNN(nn.Module):
-    """NN_influence: Input [ℓ_ij(t), s_j^{-k}, s_i^{-k}, f_ij(t), dist_ij, k, t] - unchanged"""
+    """
+    NN_influence: Input [ℓ_ij(t), s_j^{-k}, s_i^{-k}, f_ij(t), dist_ij, k, t, (optional: RBF_features, inactive_fraction)]
     
-    def __init__(self, feature_dim: int, L: int = 1, hidden_dim: int = 64):
+    Enhanced features (when use_enhanced_features=True):
+    - RBF temporal features: Encode time distribution
+    - Inactive fraction: Population saturation info
+    """
+    
+    def __init__(self, feature_dim: int, L: int = 1, hidden_dim: int = 64, num_layers: int = 2,
+                 use_enhanced_features: bool = False, num_rbf_centers: int = 5,
+                 rbf_sigma: float = 3.0, max_time: int = 23):
         super().__init__()
         self.L = L
-        # input_dim = 3 + L*2 + L*2 + feature_dim + 1 + 3 + 1
-        input_dim = 3 + L*2 + L*3 + feature_dim + 1 + 3 + 1
+        self.num_layers = num_layers
+        self.use_enhanced_features = use_enhanced_features
+        self.num_rbf_centers = num_rbf_centers
+        self.rbf_sigma = rbf_sigma
+        self.max_time = max_time
         
-        self.network = nn.Sequential(
-                nn.Linear(input_dim, hidden_dim//2),
+        # Base input
+        base_input_dim = 3 + L*2 + L*3 + feature_dim + 1 + 3 + 1
+        
+        # Enhanced features (when enabled)
+        enhanced_dim = 0
+        if use_enhanced_features:
+            # Only inactive_fraction now (RBF disabled)
+            enhanced_dim = 1  # inactive_fraction only
+        
+        input_dim = base_input_dim + enhanced_dim
+        
+        # Register RBF centers
+        if use_enhanced_features:
+            centers = torch.linspace(0, max_time, num_rbf_centers)
+            self.register_buffer('rbf_centers', centers)
+        
+        # Build flexible multi-layer network
+        layers = []
+        
+        if num_layers == 2:
+            # Original 2-layer architecture (backward compatible)
+            layers.extend([
+                nn.Linear(input_dim, hidden_dim // 2),
                 nn.ReLU(),
-                # nn.Dropout(0.3),  # 添加这行
-                # nn.Linear(hidden_dim, hidden_dim // 2),
-                # nn.ReLU(),
-                # nn.Dropout(0.2),  # 添加这行
                 nn.Linear(hidden_dim // 2, 1)
-            )
+            ])
+        elif num_layers == 3:
+            # 3-layer architecture (medium capacity)
+            layers.extend([
+                nn.Linear(input_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, hidden_dim // 2),
+                nn.ReLU(),
+                nn.Linear(hidden_dim // 2, 1)
+            ])
+        elif num_layers == 4:
+            # 4-layer architecture (high capacity)
+            layers.extend([
+                nn.Linear(input_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(hidden_dim, hidden_dim // 2),
+                nn.ReLU(),
+                nn.Linear(hidden_dim // 2, 1)
+            ])
+        else:
+            raise ValueError(f"num_layers must be 2, 3, or 4, got {num_layers}")
         
-        # self.network = nn.Sequential(
-        #         nn.Linear(input_dim, hidden_dim),
-        #         nn.ReLU(),
-        #         nn.Dropout(0.3),  # 添加这行
-        #         nn.Linear(hidden_dim, hidden_dim // 2),
-        #         nn.ReLU(),
-        #         nn.Dropout(0.2),  # 添加这行
-        #         nn.Linear(hidden_dim // 2, 1)
-        #     )
-            
-    # def forward(self, link_repr, state_history_j_excluding_k, state_history_i_excluding_k,
-    #             features_i, features_j, distances, decision_type_onehot, time):
-    #     f_ij = compute_pairwise_features(features_i, features_j)
-    #     x = torch.cat([link_repr, state_history_j_excluding_k, state_history_i_excluding_k,
-    #                    f_ij, distances, decision_type_onehot, time], dim=1)
-    #     return torch.sigmoid(self.network(x))
+        self.network = nn.Sequential(*layers)
+    
+    def _compute_rbf_features(self, time: torch.Tensor) -> torch.Tensor:
+        """Compute RBF features for time encoding."""
+        batch_size = time.shape[0]
+        time_expanded = time.expand(-1, self.num_rbf_centers)
+        centers_expanded = self.rbf_centers.unsqueeze(0).expand(batch_size, -1)
+        rbf_features = torch.exp(-((time_expanded - centers_expanded) ** 2) / (2 * self.rbf_sigma ** 2))
+        return rbf_features
 
     def forward(self, link_repr, state_history_j_excluding_k, state_history_i_excluding_k,
-                features_i, features_j, distances, decision_type_onehot, time):
-        
+                features_i, features_j, distances, decision_type_onehot, time, 
+                inactive_fraction=None):
+        """
+        Args:
+            inactive_fraction: [batch_size, 1] - Fraction of population still inactive
+                              Only used when use_enhanced_features=True
+        """
         f_ij = compute_pairwise_features(features_i, features_j)
-        x = torch.cat([link_repr, state_history_j_excluding_k, state_history_i_excluding_k,
-                       f_ij, distances, decision_type_onehot, time], dim=1)
         
-        base_influence = torch.sigmoid(self.network(x))
+        # Base features
+        base_input = [link_repr, state_history_j_excluding_k, state_history_i_excluding_k,
+                      f_ij, distances, decision_type_onehot, time]
         
-        # link_repr[0] = P(no link), link_repr[1] = P(bonding), link_repr[2] = P(bridging)
-        connection_strength = link_repr[:, 1] + link_repr[:, 2]  # 1 - P(no link)
-
+        # ✅ Enhanced features DISABLED (inactive_fraction caused issues)
+        # if self.use_enhanced_features:
+        #     # 1. RBF temporal encoding - DISABLED (too strong, causes time-only fitting)
+        #     # rbf_features = self._compute_rbf_features(time)
+        #     # base_input.append(rbf_features)
+        #     
+        #     # 2. Population saturation info
+        #     if inactive_fraction is None:
+        #         inactive_fraction = torch.full((features_i.shape[0], 1), 0.5, device=features_i.device)
+        #     base_input.append(inactive_fraction)
+        
+        x = torch.cat(base_input, dim=1)
+        
+        logits = self.network(x)
+        logits = torch.clamp(logits, -5, 5)
+        base_influence = torch.sigmoid(logits / 2.0)
+        
+        connection_strength = link_repr[:, 1] + link_repr[:, 2]
         gated_influence = base_influence.squeeze() * connection_strength
+
+        assert not torch.isnan(gated_influence).any(), \
+            f"InfluenceNN NaN! logits range: [{logits.min():.3f}, {logits.max():.3f}]"
         
         return gated_influence.unsqueeze(-1)
 
@@ -207,35 +247,141 @@ class InteractionFormationNN(nn.Module):
 
 
 class SelfActivationNN(nn.Module):
-    """NN_self: Input [x_i(t), s_i(t:t-L+1)^{-k}, k, t] - unchanged"""
+    """
+    NN_self: Input [x_i(t), s_i(t:t-L+1)^{-k}, k, t, (optional: RBF_features, inactive_fraction)] 
     
-    def __init__(self, feature_dim: int, L: int = 1, hidden_dim: int = 64):
+    Enhanced features (when use_enhanced_features=True):
+    - RBF temporal features (num_rbf_centers dim): Encode time distribution
+    - Inactive fraction (1 dim): Fraction of population still inactive for this decision
+    """
+    
+    def __init__(self, feature_dim: int, L: int = 1, hidden_dim: int = 64, num_layers: int = 2,
+                 use_enhanced_features: bool = False, num_rbf_centers: int = 5, 
+                 rbf_sigma: float = 3.0, max_time: int = 23):
         super().__init__()
         self.L = L
-        input_dim = feature_dim + L * 2 + 3 + 1
+        self.num_layers = num_layers
+        self.use_enhanced_features = use_enhanced_features
+        self.num_rbf_centers = num_rbf_centers
+        self.rbf_sigma = rbf_sigma
+        self.max_time = max_time
         
-        # self.network = nn.Sequential(
-        #         nn.Linear(input_dim, hidden_dim),
-        #         nn.ReLU(),
-        #         nn.Dropout(0.3),  
-        #         nn.Linear(hidden_dim, hidden_dim // 2),
-        #         nn.ReLU(),
-        #         nn.Dropout(0.2), 
-        #         nn.Linear(hidden_dim // 2, 1))
-
-        self.network = nn.Sequential(
-                nn.Linear(input_dim, hidden_dim//2),
+        # Base input: features + state_history + decision_type + time
+        base_input_dim = feature_dim + L * 2 + 3 + 1
+        
+        # Enhanced features (when enabled)
+        enhanced_dim = 0
+        if use_enhanced_features:
+            # Only inactive_fraction now (RBF disabled)
+            enhanced_dim = 1  # inactive_fraction only
+            
+        input_dim = base_input_dim + enhanced_dim
+        
+        # Register RBF centers as buffer (not trainable)
+        if use_enhanced_features:
+            # Distribute RBF centers across time span
+            centers = torch.linspace(0, max_time, num_rbf_centers)
+            self.register_buffer('rbf_centers', centers)
+        
+        # Build flexible multi-layer network
+        layers = []
+        current_dim = input_dim
+        
+        if num_layers == 2:
+            # Original 2-layer architecture (backward compatible)
+            layers.extend([
+                nn.Linear(current_dim, hidden_dim // 2),
                 nn.ReLU(),
-                # nn.Dropout(0.3),  
-                # nn.Linear(hidden_dim, hidden_dim // 2),
-                # nn.ReLU(),
-                # nn.Dropout(0.2), 
                 nn.Linear(hidden_dim // 2, 1)
-            )
+            ])
+        elif num_layers == 3:
+            # 3-layer architecture (medium capacity)
+            layers.extend([
+                nn.Linear(current_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, hidden_dim // 2),
+                nn.ReLU(),
+                nn.Linear(hidden_dim // 2, 1)
+            ])
+        elif num_layers == 4:
+            # 4-layer architecture (high capacity)
+            layers.extend([
+                nn.Linear(current_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(hidden_dim, hidden_dim // 2),
+                nn.ReLU(),
+                nn.Linear(hidden_dim // 2, 1)
+            ])
+        else:
+            raise ValueError(f"num_layers must be 2, 3, or 4, got {num_layers}")
+        
+        self.network = nn.Sequential(*layers)
     
-    def forward(self, features, state_history_excluding_k, decision_type_onehot, time):
-        x = torch.cat([features, state_history_excluding_k, decision_type_onehot, time], dim=1)
-        return torch.sigmoid(self.network(x))
+    def _compute_rbf_features(self, time: torch.Tensor) -> torch.Tensor:
+        """Compute RBF (Gaussian) features for time encoding."""
+        # time: [batch_size, 1]
+        # rbf_centers: [num_rbf_centers]
+        # Output: [batch_size, num_rbf_centers]
+        batch_size = time.shape[0]
+        time_expanded = time.expand(-1, self.num_rbf_centers)  # [batch_size, num_centers]
+        centers_expanded = self.rbf_centers.unsqueeze(0).expand(batch_size, -1)  # [batch_size, num_centers]
+        
+        # Gaussian RBF: exp(-(t - center)^2 / (2 * sigma^2))
+        rbf_features = torch.exp(-((time_expanded - centers_expanded) ** 2) / (2 * self.rbf_sigma ** 2))
+        return rbf_features
+    
+    def _compute_time_decay(self, time: torch.Tensor) -> torch.Tensor:
+        """
+        Compute time decay weight for self-activation.
+        As time progresses, remaining households are more 'stubborn', so decay self-activation.
+        
+        Uses exponential decay: exp(-t / tau)
+        - tau = max_time / 3.0 → more aggressive decay
+        - At t=max_time, decay ≈ 0.05 (95% reduction)
+        """
+        # More aggressive decay: tau = 23/3 ≈ 7.67
+        # t=10: 0.26, t=15: 0.14, t=23: 0.05
+        tau = self.max_time / 3.0  # Changed from /2.0 to /3.0 for stronger decay
+        decay_weight = torch.exp(-time / tau)
+        return decay_weight
+    
+    def forward(self, features, state_history_excluding_k, decision_type_onehot, time, 
+                inactive_fraction=None):
+        """
+        Args:
+            inactive_fraction: [batch_size, 1] - Fraction of population still inactive for this decision
+                              Only used when use_enhanced_features=True
+        """
+        # Base features
+        base_input = [features, state_history_excluding_k, decision_type_onehot, time]
+        
+        # ✅ Enhanced features DISABLED (inactive_fraction caused over-prediction)
+        # if self.use_enhanced_features:
+        #     # 1. RBF temporal encoding - DISABLED (too strong, causes time-only fitting)
+        #     # rbf_features = self._compute_rbf_features(time)
+        #     # base_input.append(rbf_features)
+        #     
+        #     # 2. Population saturation info (inactive fraction)
+        #     if inactive_fraction is None:
+        #         # Fallback: assume 50% inactive if not provided
+        #         inactive_fraction = torch.full((features.shape[0], 1), 0.5, device=features.device)
+        #     base_input.append(inactive_fraction)
+        
+        x = torch.cat(base_input, dim=1)
+        output = torch.sigmoid(self.network(x))
+        
+        # ✅ Time decay and enhanced features DISABLED
+        # Previously caused over-prediction issues
+        # if self.use_enhanced_features:
+        #     decay_weight = self._compute_time_decay(time)
+        #     output = output * decay_weight
+        
+        assert not torch.isnan(output).any(), "SelfActivationNN output NaN!"
+        return output
 
 
 

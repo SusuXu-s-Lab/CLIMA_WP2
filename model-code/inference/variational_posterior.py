@@ -5,7 +5,7 @@ from typing import Dict, Tuple, List
 from models import NetworkTypeNN
 from models.utils import get_full_state_history
 
-class MeanFieldPosterior:
+class MeanFieldPosterior(nn.Module):
     """
     Updated variational posterior following PDF formulation.
     
@@ -16,6 +16,7 @@ class MeanFieldPosterior:
     """
     
     def __init__(self, network_type_nn: NetworkTypeNN, L: int = 1):
+        super().__init__()
         self.network_type_nn = network_type_nn
         self.L = L
         
@@ -61,25 +62,27 @@ class MeanFieldPosterior:
                 pairs_t, conditionals_t, marginal_probs, network_data, t
             )
             
+            marginal_logits = {}
             # Store marginal probabilities  
             for idx, (i, j) in enumerate(pairs_t):
                 pair_key = f"{i}_{j}_{t}"
                 marginal_probs[pair_key] = marginals_t[idx]  # [3] vector
-        
+                marginal_logits[pair_key] = torch.log(marginal_probs[pair_key] + 1e-8)
+
         return conditional_probs, marginal_probs
-    
+
     def _compute_conditional_probabilities_timestep(self, 
-                                                   pairs_t: List[Tuple[int, int]],
-                                                   features: torch.Tensor,
-                                                   states: torch.Tensor, 
-                                                   distances: torch.Tensor,
-                                                   network_data,
-                                                   t: int) -> torch.Tensor:
+                                               pairs_t: List[Tuple[int, int]],
+                                               features: torch.Tensor,
+                                               states: torch.Tensor, 
+                                               distances: torch.Tensor,
+                                               network_data,
+                                               t: int) -> torch.Tensor:
         """
-        Compute conditional probabilities π_ij(t | k) for all pairs at timestep t.
+        OPTIMIZED: Compute conditional probabilities π_ij(t | k) for all pairs at timestep t.
         
-        We need to call the neural network 3 times (once for each previous type k'=0,1,2)
-        to get the full 3×3 transition matrix.
+        KEY OPTIMIZATION: Instead of calling NN 3 times separately for k'=0,1,2,
+        we stack all inputs and call NN once with a batch size of 3*num_pairs.
         
         Returns:
             conditionals: [len(pairs_t), 3, 3] - π_ij(t | k') for k'=0,1,2
@@ -88,7 +91,6 @@ class MeanFieldPosterior:
             return torch.empty(0, 3, 3)
         
         num_pairs = len(pairs_t)
-        conditionals = torch.zeros(num_pairs, 3, 3)
         
         # Prepare common batch data (same for all 3 NN calls)
         batch_features_i = []
@@ -99,9 +101,9 @@ class MeanFieldPosterior:
         
         for i, j in pairs_t:
             # State histories S_i(t:t-L+1), S_j(t:t-L+1)
-            state_hist_i = get_full_state_history([i], states, t, self.L)
-            state_hist_j = get_full_state_history([j], states, t, self.L)
-            #print(f'State history for {i} at t={t}: {state_hist_i}, {j} at t={t}: {state_hist_j}')
+            # OPTIMIZATION: Detach state histories (observed data, no gradient needed)
+            state_hist_i = get_full_state_history([i], states, t, self.L).detach()
+            state_hist_j = get_full_state_history([j], states, t, self.L).detach()
             
             batch_features_i.append(features[i])
             batch_features_j.append(features[j])
@@ -112,47 +114,66 @@ class MeanFieldPosterior:
         # Convert common tensors once
         features_i_batch = torch.stack(batch_features_i)  # [num_pairs, feature_dim]
         features_j_batch = torch.stack(batch_features_j)
-        state_hist_i_batch = torch.stack(batch_state_hist_i)      # [num_pairs, L*3]
+        state_hist_i_batch = torch.stack(batch_state_hist_i)  # [num_pairs, L*3]
         state_hist_j_batch = torch.stack(batch_state_hist_j)
         distances_batch = torch.stack(batch_distances).unsqueeze(1)  # [num_pairs, 1]
         is_initial_batch = torch.full((num_pairs, 1), 1.0 if t == 0 else 0.0)  # [num_pairs, 1]
         
-        # Call neural network 3 times, only changing prev_types_batch
-        for k_prev in range(3):
-            if t ==0:
-                # At t=0, we use a dummy previous type (k'=0)
-                prev_type_onehot = F.one_hot(torch.tensor(0), num_classes=3).float()
-            else:
-                # For t > 0, we use the previous type k' from the pairs
-                prev_type_onehot = F.one_hot(torch.tensor(k_prev), num_classes=3).float()
-            # Create batch of previous types (one-hot encoded)
-            # Shape: [num_pairs, 3] - same for all pairs in this batch
-            # Only this tensor changes between calls
-            prev_types_batch = prev_type_onehot.unsqueeze(0).repeat(num_pairs, 1)  # [num_pairs, 3]
+        # ==== OPTIMIZATION STARTS HERE ====
+        
+        if t == 0:
+            # At t=0, all k_prev produce the same result, so compute once
+            prev_type_onehot = F.one_hot(torch.tensor(0), num_classes=3).float()
+            prev_types_batch = prev_type_onehot.unsqueeze(0).repeat(num_pairs, 1)
             
-            # Neural network call for previous type k'
-            # print(f'features_i_batch shape: {features_i_batch.shape}, '
-            #       f'features_j_batch shape: {features_j_batch.shape}, '
-            #       f'state_hist_i_batch shape: {state_hist_i_batch.shape}, '
-            #       f'state_hist_j_batch shape: {state_hist_j_batch.shape}, '
-            #       f'prev_types_batch shape: {prev_types_batch.shape}, '
-            #       f'distances_batch shape: {distances_batch.shape}, '
-            #       f'is_initial_batch shape: {is_initial_batch.shape}')
             logits_batch = self.network_type_nn(
                 features_i_batch, features_j_batch, state_hist_i_batch, state_hist_j_batch,
                 prev_types_batch, distances_batch, is_initial_batch
             )  # [num_pairs, 3]
             
-            # Convert to probabilities and store
             probs_batch = F.softmax(logits_batch, dim=1)  # [num_pairs, 3]
-            if t == 0:
-                for i in range(3):
-                    conditionals[:, i, :] = probs_batch
-                return conditionals  # At t=0, all k' are the same
-
-            conditionals[:, k_prev, :] = probs_batch  # Store π_ij(t | k') in row k'
+            
+            # Replicate for all k_prev
+            conditionals = torch.zeros(num_pairs, 3, 3)
+            for k_prev in range(3):
+                conditionals[:, k_prev, :] = probs_batch
+            
+            return conditionals
         
-        return conditionals  # [num_pairs, 3, 3]
+        # For t > 0: Stack all 3 k_prev values and call NN once
+        
+        # Replicate inputs 3 times: one for each k_prev ∈ {0, 1, 2}
+        features_i_stacked = features_i_batch.repeat(3, 1)  # [3*num_pairs, feature_dim]
+        features_j_stacked = features_j_batch.repeat(3, 1)
+        state_hist_i_stacked = state_hist_i_batch.repeat(3, 1)  # [3*num_pairs, L*3]
+        state_hist_j_stacked = state_hist_j_batch.repeat(3, 1)
+        distances_stacked = distances_batch.repeat(3, 1)  # [3*num_pairs, 1]
+        is_initial_stacked = is_initial_batch.repeat(3, 1)  # [3*num_pairs, 1]
+        
+        # Build prev_types_stacked: [0,0,...,0, 1,1,...,1, 2,2,...,2]
+        # Shape: [3*num_pairs, 3] (one-hot encoded)
+        prev_types_list = []
+        for k_prev in range(3):
+            prev_type_onehot = F.one_hot(torch.full((num_pairs,), k_prev, dtype=torch.long), num_classes=3).float()
+            prev_types_list.append(prev_type_onehot)
+        prev_types_stacked = torch.cat(prev_types_list, dim=0)  # [3*num_pairs, 3]
+        
+        # ==== SINGLE NN CALL for all k_prev ====
+        logits_all = self.network_type_nn(
+            features_i_stacked, features_j_stacked,
+            state_hist_i_stacked, state_hist_j_stacked,
+            prev_types_stacked, distances_stacked, is_initial_stacked
+        )  # [3*num_pairs, 3]
+        
+        probs_all = F.softmax(logits_all, dim=1)  # [3*num_pairs, 3]
+        
+        # Reshape back to [3, num_pairs, 3] where first dim is k_prev
+        probs_all = probs_all.view(3, num_pairs, 3)
+        
+        # Transpose to [num_pairs, 3, 3] for final output
+        conditionals = probs_all.permute(1, 0, 2)
+        
+        return conditionals
     
     def _compute_marginal_probabilities_timestep(self,
                                                 pairs_t: List[Tuple[int, int]],
@@ -196,25 +217,31 @@ class MeanFieldPosterior:
         return torch.stack(marginals_t) if marginals_t else torch.empty(0, 3)
     
     def _get_batch_pairs(self, node_batch: torch.Tensor, network_data, max_timestep: int,
-                     n_households: int):
-        """Return ONLY pairs that both belong to the batch and pass neighbor filter (if present)."""
+                        n_households: int):
+        """Return ALL pairs (observed + hidden) that involve batch nodes and pass neighbor filter."""
         batch_pairs_by_time = {t: [] for t in range(max_timestep + 1)}
         batch_nodes_set = set(node_batch.tolist())
-
         neighbor_index = getattr(network_data, "neighbor_index", None)
 
         for t in range(max_timestep + 1):
-            all_hidden_pairs = network_data.get_hidden_pairs(t)  # existing API
+            # Get ALL pairs (not just hidden)
             if neighbor_index is None:
-                # old behavior
-                for i, j in all_hidden_pairs:
-                    if i in batch_nodes_set or j in batch_nodes_set:
-                        batch_pairs_by_time[t].append((i, j))
+                # Dense: all pairs involving batch nodes
+                for i in batch_nodes_set:
+                    for j in range(n_households):
+                        if i != j:
+                            pair = (min(i,j), max(i,j))
+                            if pair not in batch_pairs_by_time[t]:
+                                batch_pairs_by_time[t].append(pair)
             else:
-                # sparse behavior
-                for i, j in all_hidden_pairs:
-                    if (i in batch_nodes_set) or (j in batch_nodes_set):
-                        if (j in neighbor_index[i]) or (i in neighbor_index[j]):
+                # Sparse: only neighbor-filtered pairs
+                for i in range(n_households):
+                    if i not in batch_nodes_set:
+                        continue
+                    for j in neighbor_index[i]:
+                        if j <= i:
+                            continue
+                        if (i in batch_nodes_set) or (j in batch_nodes_set):
                             batch_pairs_by_time[t].append((i, j))
 
         return batch_pairs_by_time

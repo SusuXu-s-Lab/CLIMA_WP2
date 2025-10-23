@@ -83,9 +83,14 @@ class DataLoader:
         # Get dimensions
         n_households = len(features_df)
         n_timesteps = len(states_df['timestep'].unique())
+
+        # remove unused columns
+        if 'agent_type' in features_df.columns:
+            features_df.drop(columns=['agent_type'], inplace=True, errors='ignore')
         
         # Normalize feature columns (excluding household_id)
         feature_cols = [col for col in features_df.columns if ((col != 'household_id') and (col != 'home'))]
+        # feature_cols = [col for col in features_df.columns if ((col != 'household_id') and (col != 'home') and ('community' not in col))]
         features_norm = features_df.copy()
         for col in feature_cols:
             col_values = features_df[col].values.astype(float)
@@ -95,6 +100,9 @@ class DataLoader:
                 features_norm[col] = (col_values - mean) / std
             else:
                 features_norm[col] = 0.0  # If constant column
+        
+        # features_norm = features_norm[[col for col in features_norm.columns if ('community' not in col)]]
+        # print(features_norm.columns)
         
         # Convert to tensors
         states = self._create_states_tensor(states_df, n_households, n_timesteps)
@@ -114,6 +122,7 @@ class DataLoader:
             features = features.to(self.device)
             distances = distances.to(self.device)
         
+        
         return {
             'states': states,  # [N, T, 3]
             'features': features,  # [N, F]
@@ -123,6 +132,7 @@ class DataLoader:
             'n_households': n_households,
             'n_timesteps': n_timesteps,
             'feature_names': [col for col in features_df.columns if col != 'household_id']
+            # 'feature_names': [col for col in features_df.columns if (col != 'household_id') and ('community' not in col)]
         }
     
     def _create_states_tensor(self, states_df: pd.DataFrame, n_households: int, n_timesteps: int) -> torch.Tensor:
