@@ -5,53 +5,87 @@ from typing import Dict, List, Tuple
 from models import NetworkEvolution, StateTransition
 from collections import defaultdict
 
-def adaptive_focal_loss(p, y, timestep, total_timesteps, base_alpha=0.85, base_gamma=2.5):
-    n_pos = y.sum()
-    n_neg = len(y) - n_pos
+def adaptive_focal_loss(p, y, timestep, total_timesteps, valid=None, base_alpha=0.60, base_gamma=2.0):
+    """
+    Vectorized adaptive focal loss with valid mask.
     
-    if n_pos == 0:
-        return -torch.log(1 - p.clamp(1e-6, 1-1e-6)).mean()
+    CALIBRATED VERSION: Reduced alpha and gamma to prevent overconfident predictions.
     
-    ratio = n_neg / n_pos
-    alpha = 1 - 1 / (1 + 0.1 * ratio)
-    alpha = torch.clamp(alpha, base_alpha, 0.99)
+    Args:
+        p: [B, 3] or [B, T, 3] predicted hazard probabilities
+        y: [B, 3] or [B, T, 3] event labels (0/1)
+        valid: [B, 3] or [B, T, 3] mask (1 for valid/alive, 0 for ignore)
+        timestep: int, current time step
+        total_timesteps: int, total number of time steps
+        base_alpha: Base value for class weight (REDUCED from 0.85 to 0.60)
+        base_gamma: Base focusing parameter (REDUCED from 2.5 to 2.0)
+        
+    Returns:
+        loss: tensor, per-sample loss (0 for invalid positions)
+    """
+    original_shape = y.shape
+    if len(original_shape) == 3:
+        # Flatten [B, T, 3] -> [B*T, 3]
+        B, T, K = original_shape
+        p = p.reshape(B * T, K)
+        y = y.reshape(B * T, K)
+        if valid is not None:
+            valid = valid.reshape(B * T, K)
+    else:
+        B, K = original_shape
     
-    time_boost = 1 + 0.5 * (timestep / total_timesteps)
-    alpha = torch.clamp(alpha * time_boost, base_alpha, 0.99)
-    
-    gamma = base_gamma + 0.5 * torch.log10(torch.clamp(ratio, 1, 1000))
-    gamma = torch.clamp(gamma, 2.0, 3.0)
-
     eps = 1e-6
-    p = torch.clamp(p, eps, 1-eps)
-    loss_pos = -alpha * (1 - p)**gamma * y * torch.log(p)
-    loss_neg = -(1 - alpha) * p**gamma * (1 - y) * torch.log(1 - p)
-
-    loss = (loss_pos + loss_neg).mean()
-
-    assert not torch.isnan(loss) and not torch.isinf(loss), \
-        f"Focal loss output NaN/Inf at timestep={timestep}, " \
-        f"alpha={alpha:.3f}, gamma={gamma:.3f}, " \
-        f"p range=[{p.min():.6f}, {p.max():.6f}]"
+    p = torch.clamp(p, eps, 1 - eps)
+    if valid is None:
+        valid = torch.ones_like(y)
     
-    return loss
-
+    # Compute positive/negative counts only on valid positions
+    n_pos = (y * valid).sum(dim=0)  # [3]
+    n_valid = valid.sum(dim=0)
+    n_neg = n_valid - n_pos
+    n_pos_safe = torch.where(n_pos == 0, torch.ones_like(n_pos), n_pos)
+    ratio = n_neg / n_pos_safe
+    print(f"[AdaptiveFocalLoss] timestep={timestep}, n_pos={n_pos.tolist()}, n_neg={n_neg.tolist()}, ratio={ratio.tolist()}")
+    
+    # CHANGE 1: Reduce alpha growth rate (0.1 -> 0.01)
+    alpha = 1 - 1 / (1 + 0.01 * ratio)  # Slower growth
+    alpha = torch.clamp(alpha, base_alpha, 0.75)  # REDUCED upper limit: 0.99 -> 0.75
+    
+    # CHANGE 2: Remove time_boost (was causing alpha to grow too high)
+    # time_boost = 1 + 0.5 * (timestep / total_timesteps)  # REMOVED
+    # alpha = torch.clamp(alpha * time_boost, base_alpha, 0.99)  # REMOVED
+    
+    # CHANGE 3: Reduce gamma growth (0.5 -> 0.2)
+    gamma = base_gamma + 0.2 * torch.log10(torch.clamp(ratio, 1, 1000))  # Slower growth
+    gamma = torch.clamp(gamma, 1.5, 2.5)  # Limit range
+    
+    # Broadcast alpha/gamma
+    alpha = alpha.unsqueeze(0).expand_as(p)
+    gamma = gamma.unsqueeze(0).expand_as(p)
+    
+    # Compute focal loss
+    loss_pos = -alpha * (1 - p) ** gamma * y * torch.log(p)
+    loss_neg = -(1 - alpha) * p ** gamma * (1 - y) * torch.log(1 - p)
+    
+    # For decision types with no positive, only compute negative loss
+    mask_pos = (n_pos > 0).float().unsqueeze(0).expand_as(p)
+    loss_pos = loss_pos * mask_pos
+    
+    # Only keep valid positions
+    total_loss = (loss_pos + loss_neg) * valid
+    
+    if len(original_shape) == 3:
+        total_loss = total_loss.reshape(B, T, K)
+    
+    return total_loss
 
 
 class ELBOComputation(nn.Module):
-    """
-    Updated ELBO computation following PDF formulation with normalization added.
-    
-    Key changes:
-    1. Network observation likelihood uses marginal probabilities
-    2. Prior likelihood uses both marginals and conditionals (much more complex)
-    3. Posterior entropy uses conditional entropy formulas
-    4. State likelihood uses marginal-based sampling (conceptually same)
-    5. ALL TERMS NOW NORMALIZED BY GLOBAL PROBLEM SIZE
-    """
+    """ELBO computation using seq2seq state likelihood"""
 
-    def __init__(self, network_evolution: NetworkEvolution, state_transition: StateTransition,
-                 rho_1: float = 0.5, rho_2: float = 0.5, confidence_weight: float = 0.0, variational_posterior=None):
+    def __init__(self, network_evolution, state_transition,
+                 rho_1: float = 0.5, rho_2: float = 0.5, 
+                 confidence_weight: float = 0.0, variational_posterior=None):
         
         super().__init__()
         self.network_evolution = network_evolution
@@ -63,268 +97,180 @@ class ELBOComputation(nn.Module):
 
     
     def compute_state_likelihood_batch(self,
-                                features: torch.Tensor,
-                                states: torch.Tensor,
-                                distances: torch.Tensor,
-                                node_batch: torch.Tensor,
-                                network_data,
-                                gumbel_samples: List[Dict[str, torch.Tensor]],
-                                max_timestep: int,
-                                current_epoch: int = 0) -> Tuple[torch.Tensor, int]:
+                                  features: torch.Tensor,
+                                  states: torch.Tensor,
+                                  distances: torch.Tensor,
+                                  node_batch: torch.Tensor,
+                                  network_data,
+                                  gumbel_samples: List[Dict[str, torch.Tensor]],
+                                  max_timestep: int,
+                                  current_epoch: int = 0) -> Tuple[torch.Tensor, int]:
         """
-        Compute state dynamics likelihood using marginal-based Gumbel-Softmax samples.
-        
-        Returns:
-            tuple: (total_likelihood, actual_prediction_count)
-                - total_likelihood: averaged across samples
-                - actual_prediction_count: averaged number of predictions made
-        """
-        def compute_dynamic_class_weights(current_activations, current_epoch):
-            n_positive = current_activations.sum()
-            n_total = len(current_activations)
-            
-            if n_positive == 0:
-                return 1.0, 1.0  
-            
-            # Base positive weight calculation
-            base_pos_weight = min((n_total - n_positive) / n_positive, 5.0)
-            
-            # Adjust based on training phase
-            if current_epoch < 300:  # Network learning phase
-                pos_weight = base_pos_weight
-            elif current_epoch < 350:  # Bridging phase
-                progress = (current_epoch - 300) / 50
-                pos_weight = base_pos_weight * (1 - 0.4 * progress)
-            else:  # Rollout-dominated phase
-                pos_weight = base_pos_weight * 0.6
-            
-            return pos_weight, 1.0
-
-        total_likelihood = 0.0
-        total_predictions = 0  # Track actual number of predictions made
-        num_samples = len(gumbel_samples)
-        
-        for sample_idx, current_samples in enumerate(gumbel_samples):
-            self.state_transition.broken_links_history.clear()
-            self.state_transition.clear_influence_tracking()
-            sample_likelihood = 0.0
-            sample_predictions = 0  # Predictions for this sample
-            
-            for t in range(max_timestep):
-                for decision_k in range(3):
-                    # Find undecided households in batch
-                    batch_undecided = []
-                    for node_idx in node_batch:
-                        if states[node_idx, t, decision_k] == 0:
-                            batch_undecided.append(node_idx)
-                    
-                    if len(batch_undecided) == 0:
-                        continue
-                    
-                    # Count actual predictions made
-                    sample_predictions += len(batch_undecided)
-                    
-                    batch_undecided_tensor = torch.tensor(batch_undecided, dtype=torch.long)
-                    
-                    # Compute activation probabilities
-                    activation_probs = self.state_transition.compute_activation_probability(
-                        household_idx=batch_undecided_tensor,
-                        decision_type=decision_k,
-                        features=features,
-                        states=states,
-                        distances=distances,
-                        network_data=network_data,
-                        gumbel_samples=current_samples,
-                        time=t
-                    )
-
-                    assert not torch.isnan(activation_probs).any(), \
-                        f"State likelihood: activation_probs NaN at t={t}, decision_k={decision_k}"
-
-                    
-                    # Get actual outcomes
-                    actual_outcomes = states[batch_undecided, t+1, decision_k]
-                    pos_weight, neg_weight = compute_dynamic_class_weights(actual_outcomes, current_epoch)
-                    
-                    # # Compute margin loss
-                    # margin_penalty = self.margin_loss.compute_loss(activation_probs, actual_outcomes)
-                    # weighted_likelihood = -pos_weight * margin_penalty
-                    # sample_likelihood += weighted_likelihood
-
-                    targets = actual_outcomes.float()
-                    loss = adaptive_focal_loss(
-                        activation_probs, 
-                        targets, 
-                        t, 
-                        max_timestep,
-                        base_alpha=0.85, 
-                        base_gamma=2.5
-                    )
-                    sample_likelihood += (-loss)
-
-            
-            total_likelihood += sample_likelihood
-            total_predictions += sample_predictions
-        
-        # Average across samples (num_samples must be divided)
-        return total_likelihood / num_samples, total_predictions / num_samples
-    
-
-    def compute_rollout_state_likelihood_batch(self,
-                                        features: torch.Tensor,
-                                        states: torch.Tensor,
-                                        distances: torch.Tensor,
-                                        node_batch: torch.Tensor,
-                                        network_data,
-                                        gumbel_samples: List[Dict[str, torch.Tensor]],
-                                        max_timestep: int,
-                                        current_epoch: int,
-                                        rollout_steps: int = 4,
-                                        use_pred_prob: float = 0.5) -> Tuple[torch.Tensor, int]:
-        """
-        Rollout training: multi-step forward with scheduled sampling
+        Compute state likelihood using seq2seq approach.
         
         Args:
-            rollout_steps: Number of forward steps to roll out (will be dynamically adjusted based on epoch)
-            use_pred_prob: Probability of using model prediction vs ground truth (overridden by schedule)
+            features: [N, feat_dim]
+            states: [N, T+1, 3] - full state tensor
+            distances: [N, N]
+            node_batch: [batch_size] - household indices in this batch
+            network_data: network structure
+            gumbel_samples: List of sample dicts
+            max_timestep: T
             
         Returns:
-            tuple: (total_likelihood, actual_prediction_count)
+            loss: scalar loss
+            n_valid: number of valid supervisions
         """
-        if not gumbel_samples or rollout_steps <= 0:
-            return torch.tensor(0.0, device=features.device), 0
-
-        device = features.device
-        total_likelihood = 0.0
-        total_predictions = 0  # Track actual number of predictions made
-        num_samples = len(gumbel_samples)
+        device = states.device
+        N, T_plus_1, K = states.shape
+        T = max_timestep
         
-        # 🔧 AGGRESSIVE ROLLOUT: Network frozen, can give strong signals immediately
-        if current_epoch < 550:
-            rollout_steps = 4  # Not used before epoch 550
-            use_pred_prob = 0.0
-        else:
-            # From epoch 550: immediately use challenging settings
-            rollout_steps = 8  # Long-term planning from the start
-            # Aggressive scheduled sampling: quickly shift to using predictions
-            if current_epoch < 600:
-                # Fast ramp: 0.0 → 0.5 in 50 epochs
-                progress = (current_epoch - 550) / 50
-                use_pred_prob = 0.5 * progress
-            else:
-                # Continue to high value: 0.5 → 0.9
-                progress = min(1.0, (current_epoch - 600) / 100)
-                use_pred_prob = 0.5 + 0.4 * progress
-
-        for sample_idx, current_samples in enumerate(gumbel_samples):
-            self.state_transition.broken_links_history.clear()
-            self.state_transition.clear_influence_tracking()
-            sample_likelihood = 0.0
-            sample_predictions = 0  # Predictions for this sample
+        # Use first gumbel sample
+        gumbel_sample = gumbel_samples[0] if isinstance(gumbel_samples, list) else gumbel_samples
+        
+        # Compute activation probabilities for all timesteps: [N, T, 3]
+        p_seq = self.state_transition.compute_activation_probability_seq(
+            features, states, distances, network_data, gumbel_sample
+        )
+        
+        # Event indicator: s[t+1] - s[t] for t=0..T-1
+        event = states[:, 1:T+1, :] - states[:, :T, :]  # [N, T, 3]
+        event = event.float().clamp(0, 1)
+        
+        # Alive mask: only supervise at positions where not yet activated
+        alive_mask = 1.0 - states[:, :T, :].float()  # [N, T, 3]
+        
+        # Compute focal loss for all timesteps (no time adaptation)
+        loss_per_sample = adaptive_focal_loss(
+            p_seq, event, timestep=0, total_timesteps=T, valid=alive_mask
+        )  # [N, T, 3]
+        
+        # Sum over all valid positions
+        total_loss = loss_per_sample.sum()
+        n_valid = int(alive_mask.sum().item())
+        
+        # ============ NEW: Monitor prediction statistics ============
+        # Only print every 10 epochs to avoid spam
+        if current_epoch % 10 == 0:
+            decision_names = ['vacant', 'repair', 'sell']
+            print(f"\n[Prediction Stats - Epoch {current_epoch}]")
+            print("="*70)
             
-            # Select rollout starting time points
-            max_start_time = max_timestep - rollout_steps
-            if max_start_time <= 0:
-                continue
-                
-            for start_t in range(0, max_start_time, rollout_steps):  # Start every rollout_steps
-                # Initialize: use ground truth states as starting point
-                current_rollout_states = states[:, start_t, :].clone()
-                step_likelihood = 0.0
-                
-                for step in range(rollout_steps):
-                    actual_t = start_t + step
-                    if actual_t >= max_timestep:
-                        break
+            # Per-timestep statistics
+            for t in range(min(T, 15)):  # Only show first 15 timesteps to avoid clutter
+                # For each decision type
+                stats_line = f"t={t:2d}: "
+                for k in range(3):
+                    # Get valid predictions at this timestep
+                    valid_mask = alive_mask[:, t, k] > 0
                     
-                    for decision_k in range(3):
-                        # Find inactive households
-                        batch_undecided = []
-                        for node_idx in node_batch:
-                            if current_rollout_states[node_idx, decision_k] == 0:
-                                batch_undecided.append(node_idx)
+                    if valid_mask.sum() > 0:
+                        preds_t_k = p_seq[:, t, k][valid_mask]
+                        events_t_k = event[:, t, k][valid_mask]
                         
-                        if len(batch_undecided) == 0:
-                            continue
+                        mean_pred = preds_t_k.mean().item()
+                        actual_rate = events_t_k.mean().item()
+                        n_valid_tk = valid_mask.sum().item()
                         
-                        # Count actual predictions made
-                        sample_predictions += len(batch_undecided)
-                        
-                        batch_undecided_tensor = torch.tensor(batch_undecided, dtype=torch.long)
-                        
-                        # Build temporary state tensor for prediction
-                        temp_states = states.clone()
-                        temp_states[:, actual_t, :] = current_rollout_states
-                        
-                        # Compute activation probabilities
-                        activation_probs = self.state_transition.compute_activation_probability(
-                            household_idx=batch_undecided_tensor,
-                            decision_type=decision_k,
-                            features=features,
-                            states=temp_states,
-                            distances=distances,
-                            network_data=network_data,
-                            gumbel_samples=current_samples,
-                            time=actual_t
-                        )
-
-                        assert not torch.isnan(activation_probs).any(), \
-                            f"Rollout likelihood: activation_probs NaN at t={actual_t}, decision_k={decision_k}"
-
-                        
-                        # Get ground truth labels
-                        true_outcomes = states[batch_undecided, actual_t + 1, decision_k]
-                        
-                        # Dynamic class weights with epoch-based adjustment
-                        n_positive = true_outcomes.sum()
-                        n_total = len(true_outcomes)
-                        if n_positive > 0:
-                            base_pos_weight = min((n_total - n_positive) / n_positive, 5.0)
-                            
-                            # Adjust penalty based on current epoch
-                            if current_epoch < 300:  # Network learning phase
-                                pos_weight = base_pos_weight
-                            elif current_epoch < 350:  # Bridging phase
-                                progress = (current_epoch - 300) / 50
-                                pos_weight = base_pos_weight * (1 - 0.4 * progress)
-                            else:  # Rollout-dominated phase
-                                pos_weight = base_pos_weight * 0.6
-                        else:
-                            pos_weight = 1.0
-                        
-                        # Compute loss
-                        loss = adaptive_focal_loss(
-                            activation_probs, 
-                            true_outcomes, 
-                            actual_t, 
-                            max_timestep,
-                            base_alpha=0.85, 
-                            base_gamma=2.5
-                        )
-                        step_likelihood += (-loss)
-                        
-                        # Scheduled Sampling: update rollout states
-                        if step < rollout_steps - 1:  # Don't update on the last step
-                            for idx, node_idx in enumerate(batch_undecided):
-                                if torch.rand(1) < use_pred_prob:
-                                    # Use model prediction
-                                    predicted = (activation_probs[idx] > 0.5).float()
-                                    current_rollout_states[node_idx, decision_k] = predicted
-                                else:
-                                    # Use ground truth
-                                    current_rollout_states[node_idx, decision_k] = true_outcomes[idx]
-                    
-                    sample_likelihood += step_likelihood
+                        stats_line += f"{decision_names[k]}: pred={mean_pred:.4f} (actual={actual_rate:.4f}, n={n_valid_tk:3d}) | "
+                    else:
+                        stats_line += f"{decision_names[k]}: - | "
+                
+                print(stats_line)
             
-            total_likelihood += sample_likelihood
-            total_predictions += sample_predictions
-
-        # Average across samples
-        rollout_avg = total_likelihood / num_samples
-        avg_predictions = total_predictions / num_samples
-        print(f"📊 Rollout - Steps: {rollout_steps}, use_pred_prob: {use_pred_prob:.2f}, "
-              f"likelihood: {rollout_avg.item():.4f}, predictions: {avg_predictions:.1f}")
-        return rollout_avg, avg_predictions
+            # Overall statistics (across all timesteps)
+            print("\n" + "-"*70)
+            print("Overall Statistics (all timesteps):")
+            for k, dec_name in enumerate(decision_names):
+                valid_mask_all = alive_mask[:, :, k] > 0
+                
+                if valid_mask_all.sum() > 0:
+                    preds_all = p_seq[:, :, k][valid_mask_all]
+                    events_all = event[:, :, k][valid_mask_all]
+                    
+                    print(f"  {dec_name.upper()}:")
+                    print(f"    Mean pred: {preds_all.mean():.4f} ± {preds_all.std():.4f}")
+                    print(f"    Range: [{preds_all.min():.4f}, {preds_all.max():.4f}]")
+                    print(f"    Actual event rate: {events_all.mean():.4f}")
+                    print(f"    Valid samples: {valid_mask_all.sum().item()}")
+            
+            print("="*70 + "\n")
+        # ============ END: Monitor prediction statistics ============
+        
+        return -total_loss, n_valid
+    
+    def compute_rollout_likelihood(self,
+                              features: torch.Tensor,
+                              initial_states: torch.Tensor,
+                              distances: torch.Tensor,
+                              network_data,
+                              gumbel_samples: Dict[str, torch.Tensor],
+                              max_timestep: int,
+                              true_states: torch.Tensor) -> Tuple[torch.Tensor, int]:
+        """
+        Compute rollout likelihood by simulating forward without teacher forcing.
+        
+        Args:
+            features: [N, feat_dim]
+            initial_states: [N, 1, 3] - states at t=0
+            distances: [N, N]
+            network_data: network structure
+            gumbel_samples: single sample dict
+            max_timestep: T
+            true_states: [N, T+1, 3] - ground truth for supervision
+            
+        Returns:
+            loss: scalar loss
+            n_valid: number of valid supervisions
+        """
+        device = features.device
+        N = features.shape[0]
+        T = max_timestep
+        
+        # Initialize simulated states list (avoid inplace operations)
+        simulated_states_list = [initial_states.squeeze(1)]  # List of [N, 3] tensors
+        
+        total_loss = 0.0
+        n_valid = 0
+        
+        for t in range(T):
+            # Build states tensor from list
+            current_states = torch.stack(simulated_states_list, dim=1)  # [N, t+1, 3]
+            
+            # Pad to match expected shape [N, t+2, 3] for seq method
+            temp_states = torch.cat([
+                current_states,
+                torch.zeros((N, 1, 3), device=device)
+            ], dim=1)  # [N, t+2, 3]
+            
+            # Compute activation probability for timestep t
+            p_seq_partial = self.state_transition.compute_activation_probability_seq(
+                features, temp_states, distances, network_data, gumbel_samples
+            )  # [N, t+1, 3]
+            
+            p_t = p_seq_partial[:, -1, :]  # [N, 3] - probability for t+1
+            
+            # Sample binary outcomes (detach to prevent backprop through sampling)
+            sampled_events = torch.bernoulli(p_t.detach())  # [N, 3]
+            
+            # Update states: once activated, stay activated
+            new_state = torch.maximum(simulated_states_list[-1], sampled_events)
+            simulated_states_list.append(new_state)
+            
+            # Compute loss for this timestep
+            event_true = true_states[:, t+1, :] - true_states[:, t, :]
+            event_true = event_true.float().clamp(0, 1)
+            alive_mask = 1.0 - true_states[:, t, :].float()
+            
+            loss_t = adaptive_focal_loss(
+                p_t.unsqueeze(1), event_true.unsqueeze(1), 
+                timestep=0, total_timesteps=T, valid=alive_mask.unsqueeze(1)
+            ).sum()
+            
+            total_loss += loss_t
+            n_valid += int(alive_mask.sum().item())
+    
+        return -total_loss, n_valid
       
 
     def compute_network_observation_likelihood_batch(self,
@@ -482,6 +428,7 @@ class ELBOComputation(nn.Module):
                 )  # [3, 3]
                 
                 timestep_pairs.append((i, j, π_prev, π_cond, trans))
+    
             
             if not timestep_pairs:
                 continue
@@ -713,6 +660,134 @@ class ELBOComputation(nn.Module):
     
 
 
+    # def compute_type_specific_density_penalty(self, marginal_probs, network_data, max_timestep,
+    #                                         temperature=0.01, balance_factor=1.0,
+    #                                         penalty_strength=1.0,
+    #                                         rho1_scale=1.0, rho2_scale=1.0):
+    #     """
+    #     Temporal-aware sparse density penalty:
+    #     - Adjusts expected hidden counts based on timestep
+    #     - t=0: Higher expectation (all links form here)
+    #     - t>0: Lower expectation (only persistence, no new formation)
+    #     """
+    #     import torch
+    #     import torch.nn.functional as F
+
+    #     device = next((v.device for v in marginal_probs.values()), torch.device("cpu")) \
+    #             if len(marginal_probs) > 0 else torch.device("cpu")
+    #     eps = 1e-8
+
+    #     neighbor_index = getattr(network_data, "neighbor_index", None)
+    #     def in_cand(i, j):
+    #         if neighbor_index is None:
+    #             return True
+    #         return (j in neighbor_index[i]) or (i in neighbor_index[j])
+
+    #     # group candidate marginals by timestep
+    #     timestep_probs = {}
+    #     for key, pij in marginal_probs.items():
+    #         parts = key.split('_')
+    #         if len(parts) != 3: continue
+    #         t = int(parts[2])
+    #         timestep_probs.setdefault(t, []).append(pij)
+
+    #     total_penalty = torch.tensor(0.0, device=device)
+
+    #     # logs (for visibility)
+    #     tot_exp_hidden_bond = 0.0
+    #     tot_exp_hidden_brid = 0.0
+    #     tot_pred_bond = 0.0
+    #     tot_pred_brid = 0.0
+    #     tot_cand_pairs = 0
+
+    #     # candidate-effective missing rates (optionally scaled)
+    #     r1 = max(0.0, min(0.999, float(self.rho_1) * float(rho1_scale)))
+    #     r2 = max(0.0, min(0.999, float(self.rho_2) * float(rho2_scale)))
+    #     r1_tensor = torch.tensor(r1, device=device)
+    #     r2_tensor = torch.tensor(r2, device=device)
+
+    #     for t in range(max_timestep + 1):
+    #         # 1) count observed positives in candidates at t
+    #         m1 = 0  # observed bonding inside candidates
+    #         m2 = 0  # observed bridging inside candidates
+    #         observed_edges_t = network_data.get_observed_edges_at_time(t)
+    #         for (i, j, link_type) in observed_edges_t:
+    #             if in_cand(i, j):
+    #                 if link_type == 1: m1 += 1
+    #                 elif link_type == 2: m2 += 1
+
+    #         m1_t = torch.tensor(float(m1), device=device)
+    #         m2_t = torch.tensor(float(m2), device=device)
+
+    #         # 2) MODIFIED: Temporal-aware expected hidden counts
+    #         # Bonding links: stable across time (same expectation)
+    #         exp_hidden_bond_t = m1_t / (1.0 - r1_tensor + eps)
+            
+    #         # Bridging links: temporal adjustment
+    #         if t == 0:
+    #             # t=0: Standard expectation (formation timestep)
+    #             exp_hidden_brid_t = m2_t / (1.0 - r2_tensor + eps)
+    #         else:
+    #             # t>0: Lower expectation (only persistence, no new formation)
+    #             # Simple decay model - you can adjust this factor
+    #             decay_factor = 1.0  # Exponential decay
+    #             exp_hidden_brid_t = m2_t / (1.0 - r2_tensor + eps) * decay_factor
+
+    #         # 3) model predicted counts on candidates at t (unchanged)
+    #         pred_bond_t = torch.tensor(0.0, device=device)
+    #         pred_brid_t = torch.tensor(0.0, device=device)
+    #         n_cand_t = 0
+    #         if t in timestep_probs and len(timestep_probs[t]) > 0:
+    #             prob_stack = torch.stack(timestep_probs[t]).to(device)
+    #             n_cand_t = prob_stack.shape[0]
+    #             logits = torch.log(prob_stack + eps)
+    #             sharp = F.softmax(logits / temperature, dim=1)
+    #             pred_bond_t = sharp[:, 1].sum()
+    #             pred_brid_t = sharp[:, 2].sum()
+
+    #         # 4) penalties with temporal weighting
+    #         bond_pen_t = torch.tensor(0.0, device=device)
+    #         if exp_hidden_bond_t.item() > 0.1:
+    #             rel_err = torch.abs(pred_bond_t - exp_hidden_bond_t) / (exp_hidden_bond_t + eps)
+    #             bond_pen_t = balance_factor * rel_err
+    #         bond_pen_t = 5.0 * torch.clamp(bond_pen_t, 0.0, 5.0)
+
+    #         brid_pen_t = torch.tensor(0.0, device=device)
+    #         if exp_hidden_brid_t.item() > 0.1:
+    #             ratio = (pred_brid_t + 1.0) / (exp_hidden_brid_t + 1.0)
+    #             brid_pen_t = torch.abs(torch.log(ratio))
+    #             # brid_pen_t = torch.abs(ratio)
+    #         brid_pen_t = 5 * torch.clamp(brid_pen_t, 0.0, 5.0)
+
+    #         # bond_pen_t = bond_pen_t * (brid_pen_t/(brid_pen_t + 1.0))
+
+    #         # MODIFIED: Add temporal weighting
+    #         if t == 0:
+    #             time_weight = 3.0  # Higher weight for t=0 (formation time)
+    #         elif t <= 2:
+    #             time_weight = 2.0  # Medium weight for early timesteps
+    #         else:
+    #             time_weight = 1.0  # Standard weight for later timesteps
+            
+    #         total_penalty = total_penalty + time_weight * (bond_pen_t + brid_pen_t)
+
+    #         # logs
+    #         tot_exp_hidden_bond += float(exp_hidden_bond_t.item())
+    #         tot_exp_hidden_brid += float(exp_hidden_brid_t.item())
+    #         tot_pred_bond += float(pred_bond_t.item())
+    #         tot_pred_brid += float(pred_brid_t.item())
+    #         tot_cand_pairs += n_cand_t
+
+    #     final_penalty = penalty_strength * (total_penalty / float(max_timestep + 1))
+
+    #     if neighbor_index is not None:
+    #         print(f"[SparsePenalty] avg candidate pairs per t ≈ {tot_cand_pairs / float(max_timestep + 1):.1f}")
+    #     print(f"  Expected hidden (candidates): bonding={tot_exp_hidden_bond:.1f}, bridging={tot_exp_hidden_brid:.1f}")
+    #     print(f"  Predicted (candidates):       bonding={tot_pred_bond:.1f}, bridging={tot_pred_brid:.1f}")
+    #     print(f"  Final penalty: {float(final_penalty.item()):.3f}")
+
+    #     return final_penalty
+
 
     def compute_type_specific_density_penalty(self, marginal_probs, network_data, max_timestep,
                                           temperature=0.01, balance_factor=1.0,
@@ -888,6 +963,94 @@ class ELBOComputation(nn.Module):
         # Apply strength
         return -sparsity_strength * total_prior
 
+    # def compute_sparsity_penalty(self, marginal_probs, network_data, node_batch, max_timestep, sparsity_strength=5.0):
+    #     """
+    #     Sparsity prior: penalize predicting links for HIDDEN pairs only.
+    #     """
+    #     total_prior = 0.0
+    #     count = 0
+    #     batch_nodes_set = set(node_batch.tolist())
+        
+    #     for pair_key, marginal in marginal_probs.items():
+    #         parts = pair_key.split('_')
+    #         if len(parts) != 3:
+    #             continue
+    #         i, j, t = int(parts[0]), int(parts[1]), int(parts[2])
+            
+    #         if i not in batch_nodes_set and j not in batch_nodes_set:
+    #             continue
+    #         if t > max_timestep:
+    #             continue
+            
+    #         # Skip observed pairs
+    #         if network_data.is_observed(i, j, t):
+    #             continue
+            
+    #         # Only penalize hidden pairs
+    #         prior = (marginal[0] * torch.log(torch.tensor(0.99)) +
+    #                 (marginal[1] + marginal[2]) * torch.log(torch.tensor(0.01)))
+    #         total_prior += prior
+    #         count += 1
+        
+    #     if count > 0:
+    #         total_prior = total_prior / count
+        
+    #     return -sparsity_strength * total_prior
+
+    # def compute_sparsity_penalty(self, marginal_probs, network_data, node_batch, 
+    #                                  max_timestep, target_link_count=1800):
+    #     """
+    #     Adaptive: adjust penalty based on current predictions.
+    #     """
+    #     # Count current predicted links
+    #     total_links = 0
+    #     total_pairs = 0
+        
+    #     for pair_key, marginal in marginal_probs.items():
+    #         parts = pair_key.split('_')
+    #         if len(parts) != 3:
+    #             continue
+    #         i, j, t = int(parts[0]), int(parts[1]), int(parts[2])
+    #         if t > max_timestep:
+    #             continue
+    #         if network_data.is_observed(i, j, t):
+    #             continue
+            
+    #         total_links += (marginal[1] + marginal[2]).item()
+    #         total_pairs += 1
+        
+    #     # Adaptive strength based on current state
+    #     if total_links < target_link_count * 0.5:
+    #         # Too sparse, encourage links
+    #         strength = 0.0  # No penalty
+    #     elif total_links > target_link_count * 2:
+    #         # Too dense, penalize links
+    #         strength = 3.0
+    #     else:
+    #         # Reasonable range, moderate penalty
+    #         strength = 1.0
+        
+    #     # Compute penalty
+    #     total_prior = 0.0
+    #     count = 0
+    #     for pair_key, marginal in marginal_probs.items():
+    #         parts = pair_key.split('_')
+    #         if len(parts) != 3:
+    #             continue
+    #         i, j, t = int(parts[0]), int(parts[1]), int(parts[2])
+    #         if t > max_timestep or network_data.is_observed(i, j, t):
+    #             continue
+            
+    #         prior = (marginal[0] * torch.log(torch.tensor(0.99)) +
+    #                 (marginal[1] + marginal[2]) * torch.log(torch.tensor(0.01)))
+    #         total_prior += prior
+    #         count += 1
+        
+    #     if count > 0:
+    #         total_prior = total_prior / count
+        
+    #     return -strength * total_prior
+
 
     
     def compute_elbo_batch(self,
@@ -911,7 +1074,7 @@ class ELBOComputation(nn.Module):
                 return {
                     'state': 0.0, 
                     'rollout': 0.0,
-                    'observation': 10.0, 
+                    'observation': 20.0, 
                     'prior': 1.0,                       
                     'entropy': 1.0, 
                     'sparse_penalty': 0.0,    
@@ -921,7 +1084,7 @@ class ELBOComputation(nn.Module):
                 progress = (epoch - 150) / 200
                 state_weight = 0.1  
                 prior_weight = 1.0 + 9.0 * progress 
-                observation_weight = 10.0 + 10.0 * progress
+                observation_weight = 20.0 + 20.0 * progress
                 # 🔧 FIX: Gradual density weight increase (1.0 → 10.0)
                 # Smoother than jumping directly to 10
                 density_weight = 1.0 + 9.0 * progress  # 1 → 10 over 200 epochs
@@ -938,7 +1101,7 @@ class ELBOComputation(nn.Module):
                 return {
                     'state': 0.1, 
                     'rollout': 0.0,
-                    'observation': 20.0, 
+                    'observation': 40.0, 
                     'prior': 10.0,    
                     'entropy': 1.0, 
                     'sparse_penalty': 0.0,
@@ -948,8 +1111,8 @@ class ELBOComputation(nn.Module):
                 # 🔧 STRONG SIGNAL: Network is frozen, give strong signals immediately
                 # No need for gradual ramp-up since network structure won't be affected
                 return {
-                    'state': 10000.0,                    # Strong signal for one-step prediction
-                    'rollout': 100.0,                  # Strong signal for multi-step rollout
+                    'state': 200.0,                    # Strong signal for one-step prediction
+                    'rollout': 200.0,                  # Strong signal for multi-step rollout
                     'observation': 0.0, 
                     'prior': 0.0,
                     'entropy': 0.0, 
@@ -977,14 +1140,18 @@ class ELBOComputation(nn.Module):
         timing_results['state_likelihood'] = time.time() - start_time
 
         start_time = time.time()
-        if current_epoch < 550:
+        if current_epoch >= 0:
             rollout_likelihood_raw, rollout_count = torch.tensor(0.0), 0
         else:
             # 🔧 IMPROVED: Remove hardcoded parameters, let function decide based on epoch
-            rollout_likelihood_raw, rollout_count = self.compute_rollout_state_likelihood_batch(
-                features, states, distances, node_batch, network_data, gumbel_samples, 
-                max_timestep, current_epoch=current_epoch
-                # rollout_steps and use_pred_prob are now dynamically determined inside the function
+            rollout_likelihood_raw, rollout_count = self.compute_rollout_likelihood(
+                features=features,
+                initial_states=states[:, 0:1, :],  # [N, 1, 3] - only initial state
+                distances=distances,
+                network_data=network_data,
+                gumbel_samples=gumbel_samples[0],      # Single sample dict
+                max_timestep=max_timestep,
+                true_states=states                 # [N, T+1, 3] - full ground truth
             )
         timing_results['rollout_likelihood'] = time.time() - start_time
 
@@ -1041,20 +1208,16 @@ class ELBOComputation(nn.Module):
         network_likelihood_per_pair = observation_likelihood_raw / obs_count if obs_count > 0 else torch.tensor(0.0)
         prior_likelihood_per_pair = prior_likelihood_raw / prior_count if prior_count > 0 else torch.tensor(0.0)
         entropy_per_pair = posterior_entropy_raw / entropy_count if entropy_count > 0 else torch.tensor(0.0)
-        # confidence_per_pair = confidence_reg_raw / confidence_count if confidence_count > 0 else torch.tensor(0.0)
-        
-        print(f"Per-unit values - State: {state_likelihood_per_prediction.item():.4f}, "
-            f"Obs: {network_likelihood_per_pair.item():.4f}, "
-            f"Prior: {prior_likelihood_per_pair.item():.4f}, "
-            f"Entropy: {entropy_per_pair.item():.4f}")
-        
 
-        weight = get_dynamic_weights(current_epoch)       
+        print(f"Per-unit values - State: {state_likelihood_per_prediction.item():.4f}, "
+              f"Obs: {network_likelihood_per_pair.item():.4f}, "
+              f"Prior: {prior_likelihood_per_pair.item():.4f}, "
+              f"Entropy: {entropy_per_pair.item():.4f}")
+
+        weight = get_dynamic_weights(current_epoch)
         # Apply adaptive weighting
         weighted_state_likelihood = weight['state'] * state_likelihood_per_prediction
-        total_rollout_predictions = len(node_batch) * 3 * 3  # Assume 3-step rollout
-        rollout_likelihood_per_prediction = rollout_likelihood_raw / total_rollout_predictions if total_rollout_predictions > 0 else torch.tensor(0.0)
-        weighted_rollout_likelihood = weight.get('rollout', 0.0) * rollout_likelihood_per_prediction 
+        weighted_rollout_likelihood = weight.get('rollout', 0.0) * rollout_likelihood_per_prediction
         weighted_observation_likelihood = weight['observation'] * network_likelihood_per_pair
         weighted_prior_likelihood = weight['prior'] * prior_likelihood_per_pair
         weighted_posterior_entropy = weight['entropy'] * entropy_per_pair
@@ -1063,6 +1226,14 @@ class ELBOComputation(nn.Module):
 
         
         # Total weighted ELBO
+        # total_elbo = (weighted_state_likelihood + weighted_observation_likelihood +
+        #             weighted_prior_likelihood + weighted_posterior_entropy - weighted_confidence_reg - weighted_constraint_penalty)
+        # total_elbo = (weighted_state_likelihood + weighted_observation_likelihood +
+        #             weighted_prior_likelihood + weighted_posterior_entropy - weighted_confidence_reg -
+        #             weighted_constraint_penalty - weighted_density_penalty - weighted_info_propagation)
+        # total_elbo = (weighted_state_likelihood + weighted_rollout_likelihood + weighted_observation_likelihood +
+        #             weighted_prior_likelihood + weighted_posterior_entropy - weighted_confidence_reg 
+        #              - weighted_density_penalty - weighted_info_propagation)
         total_elbo = (weighted_state_likelihood + weighted_rollout_likelihood + weighted_observation_likelihood +
                     weighted_prior_likelihood + weighted_posterior_entropy 
                      - weighted_density_penalty - weighted_sparsity_penalty)
@@ -1091,9 +1262,9 @@ class ELBOComputation(nn.Module):
         print("  Helps identify which NN is getting stronger training signals.\n")
         
         # Get parameters for prediction networks
-        params_influence = [p for p in self.state_transition.influence_nn.parameters() if p.requires_grad]
-        params_self = [p for p in self.state_transition.self_nn.parameters() if p.requires_grad]
-
+        params_influence = [p for p in self.state_transition.seq_pair_infl_nn.parameters() if p.requires_grad]
+        params_self = [p for p in self.state_transition.seq_self_nn.parameters() if p.requires_grad]
+        
         def safe_grad_norm_of(scalar, params, name="unknown"):
             """
             Compute gradient norm (L2 norm) safely.

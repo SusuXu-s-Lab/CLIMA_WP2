@@ -27,7 +27,7 @@ sys.path.append(str(project_root))
 # Import our modules
 from data import DataLoader, DisasterRecoveryDataGenerator
 from models import (
-    NetworkTypeNN, SelfActivationNN, InfluenceNN, InteractionFormationNN,
+    NetworkTypeNN, SeqSelfNN, SeqPairInfluenceNN, InteractionFormationNN,
     NetworkEvolution, StateTransition
 )
 from inference import (
@@ -40,26 +40,40 @@ import torch.nn as nn
 
 def apply_xavier_init(trainer):
     """Apply Xavier initialization to all model components."""
-    
-    # List of all neural networks in the trainer
     networks = [
         trainer.mean_field_posterior.network_type_nn,
-        trainer.elbo_computer.state_transition.self_nn,
-        trainer.elbo_computer.state_transition.influence_nn,
         trainer.elbo_computer.network_evolution.interaction_nn
     ]
     
-    # Apply Xavier initialization
+    # Init network inference NNs
     for network in networks:
         for module in network.modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0.0)
+    
+    # Init prediction GRU networks (may be lazy-initialized)
+    seq_self_nn = trainer.elbo_computer.state_transition.seq_self_nn
+    seq_pair_nn = trainer.elbo_computer.state_transition.seq_pair_infl_nn
+    
+    for nn_module in [seq_self_nn, seq_pair_nn]:
+        # Only initialize if GRU exists (not lazy)
+        if nn_module.gru is not None:
+            # Init GRU weights
+            for name, param in nn_module.gru.named_parameters():
+                if 'weight' in name:
+                    nn.init.xavier_uniform_(param)
+                elif 'bias' in name:
+                    nn.init.constant_(param, 0.0)
+            
+            # Init head with negative bias
+            nn.init.xavier_uniform_(nn_module.head.weight)
+            nn.init.constant_(nn_module.head.bias, -4.0)
 
 
 CONFIG = {
-    'data_dir': 'data/syn_data_abm_v2_config/dataset/ABM_Dense_LowSeed_B', # Directory for synthetic data
+    'data_dir': 'data/syn_data_ruxiao_v4_config/dataset/G6_Dense_HighSeed', # Directory for synthetic data
     'models_dir': 'saved_models',
     'logs_dir': 'logs'
 }
@@ -125,14 +139,18 @@ def create_models(data: Dict[str, Any], L: int) -> Dict[str, Any]:
     print(f"Feature dimension: {feature_dim}")
     print(f"History length: {L}")
     
-    # Create neural networks
+        # Create neural networks
     print("Creating neural networks...")
     network_type_nn = NetworkTypeNN(feature_dim=feature_dim, L=L, hidden_dim=128)
-    self_nn = SelfActivationNN(feature_dim=feature_dim, L=L, hidden_dim=512, num_layers=3)
-    influence_nn = InfluenceNN(feature_dim=feature_dim, L=L, hidden_dim=512, num_layers=3)
+    
+    # NEW: GRU-based seq2seq networks with lazy initialization
+    # feature_dim and pairwise_feature_dim will be inferred on first forward pass
+    seq_self_nn = SeqSelfNN(feature_dim=feature_dim, hidden_dim=32)
+    seq_pair_infl_nn = SeqPairInfluenceNN(pairwise_feature_dim=feature_dim, hidden_dim=32)
+    
     interaction_nn = InteractionFormationNN(feature_dim=feature_dim, hidden_dim=128)
     
-    print("✓ Neural networks created")
+    print("✓ Neural networks created (GRU-based with lazy initialization)")
     
     # Create network evolution model
     print("Creating network evolution model...")
@@ -143,16 +161,15 @@ def create_models(data: Dict[str, Any], L: int) -> Dict[str, Any]:
     network_evolution.set_normalization_factors(data['features'], data['distances'])
     print("✓ Network evolution model created")
     
-    # Create state transition model
+    # Create state transition model (NEW: simplified initialization)
     print("Creating state transition model...")
-    state_transition = StateTransition(self_nn, influence_nn, L=L, 
-                                       max_neighbor_influences=TRAINING_CONFIG['max_neighbor_influences'])
-    print("✓ State transition model created")
+    state_transition = StateTransition(seq_self_nn=seq_self_nn, seq_pair_infl_nn=seq_pair_infl_nn)
+    print("✓ State transition model created (seq2seq GRU architecture)")
     
     models = {
         'network_type_nn': network_type_nn,
-        'self_nn': self_nn,
-        'influence_nn': influence_nn,
+        'seq_self_nn': seq_self_nn,
+        'seq_pair_infl_nn': seq_pair_infl_nn,
         'interaction_nn': interaction_nn,
         'network_evolution': network_evolution,
         'state_transition': state_transition
@@ -195,9 +212,9 @@ def create_inference_components(models: Dict[str, Any], L: int, use_sparsity: bo
         elbo_computer=elbo_computer,
         learning_rate=TRAINING_CONFIG['learning_rate'],
         weight_decay=TRAINING_CONFIG['weight_decay'],
-        L_linger=TRAINING_CONFIG['L_linger'],
-        decay_type=TRAINING_CONFIG['decay_type'],
-        decay_rate=TRAINING_CONFIG['decay_rate']
+        # L_linger=TRAINING_CONFIG['L_linger'],
+        # decay_type=TRAINING_CONFIG['decay_type'],
+        # decay_rate=TRAINING_CONFIG['decay_rate']
     )
     apply_xavier_init(trainer)
     
@@ -280,10 +297,13 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     print("=== Saving Results ===")
     
     # Prepare model state dictionaries
+    # Access GRU networks through state_transition
+    state_transition = models['state_transition']
+    
     model_state = {
         'network_type_nn': models['network_type_nn'].state_dict(),
-        'self_nn': models['self_nn'].state_dict(),
-        'influence_nn': models['influence_nn'].state_dict(),
+        'seq_self_nn': state_transition.seq_self_nn.state_dict(),
+        'seq_pair_infl_nn': state_transition.seq_pair_infl_nn.state_dict(),
         'interaction_nn': models['interaction_nn'].state_dict(),
         'network_evolution': models['network_evolution'].state_dict(),
     }
@@ -316,7 +336,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     }
     
     # Save complete model
-    model_path = 'saved_models/ABM_Dense_LowSeed_B_obs10_prior1_entropy1_density1_penalize_Wrong_observation_epoch350.pth' 
+    model_path = 'saved_models/G6_Dense_HighSeed_obs20_prior1_entropy1_density1_penalize_Wrong_observation_epoch350.pth' 
     torch.save({
         'model_state': model_state,
         'elbo_params': elbo_params,
@@ -327,7 +347,7 @@ def save_model_and_results(models: Dict[str, Any], inference_components: Dict[st
     print(f"✓ Model saved to {model_path}")
     
     # Save training history as JSON for analysis
-    history_path = 'logs/ABM_Dense_LowSeed_B_obs10_prior1_entropy1_density1_penalize_Wrong_observation_json.json'
+    history_path = 'logs/G6_Dense_HighSeed_obs20_prior1_entropy1_density1_penalize_Wrong_observation_json.json'
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
     
@@ -387,7 +407,7 @@ def main():
             loader=loader,
             inference_components=inference_components,
             train_end_time=10,  # Train on timesteps 0-15, test on 16-24
-            max_epochs=350
+            max_epochs=300
         )
         
         # 6. Save results

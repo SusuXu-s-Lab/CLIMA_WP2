@@ -19,8 +19,8 @@ TRAINING_CONFIG = {
     'max_epochs': 1000,
     'rho_1': 0.5,  # Initial rho_1 for ELBO computation
     'rho_2': 0.5,  # Initial rho_2 for ELBO computation
-    'L_linger': 3,
-    'decay_type': 'exponential',  # 'linear' or 'exponential
-    'decay_rate': 0.5,
+    # 'L_linger': 3,
+    # 'decay_type': 'exponential',  # 'linear' or 'exponential
+    # 'decay_rate': 0.5,
     'max_neighbor_influences': 5  # FIXED: Was 100, causing train-eval inconsistency
 }

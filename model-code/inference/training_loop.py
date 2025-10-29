@@ -21,30 +21,23 @@ class NetworkStateTrainer:
     """
     
     def __init__(self, 
-                 mean_field_posterior: MeanFieldPosterior,
-                 gumbel_sampler: GumbelSoftmaxSampler,
-                 elbo_computer: ELBOComputation,
-                 learning_rate: float = 1e-3,
-                 weight_decay: float = 1e-4,
-                 L_linger: int = 3,
-                 decay_type: str = 'exponential',
-                 decay_rate: float = 0.5):
+                mean_field_posterior: MeanFieldPosterior,
+                gumbel_sampler: GumbelSoftmaxSampler,
+                elbo_computer: ELBOComputation,
+                learning_rate: float = 1e-3,
+                weight_decay: float = 1e-4):
         
         self.mean_field_posterior = mean_field_posterior
         self.gumbel_sampler = gumbel_sampler
         self.elbo_computer = elbo_computer
-        self.L_linger = L_linger
-        self.decay_type = decay_type
-        self.decay_rate = decay_rate
         
         # Collect all parameters
         all_params = []
         all_params.extend(self.mean_field_posterior.network_type_nn.parameters())
-        all_params.extend(self.elbo_computer.state_transition.self_nn.parameters())
-        all_params.extend(self.elbo_computer.state_transition.influence_nn.parameters())
+        all_params.extend(self.elbo_computer.state_transition.seq_self_nn.parameters())
+        all_params.extend(self.elbo_computer.state_transition.seq_pair_infl_nn.parameters())
         all_params.extend(self.elbo_computer.network_evolution.interaction_nn.parameters())
         all_params.extend(self.elbo_computer.network_evolution.parameters())
-        # all_params.extend([self.elbo_computer.rho_1, self.elbo_computer.rho_2])
         
         self.optimizer = optim.Adam(all_params, lr=learning_rate, weight_decay=weight_decay)
         
@@ -238,11 +231,11 @@ class NetworkStateTrainer:
             prev_entropy = 0.08
      
         if prev_entropy < 0.05:
-            temperature = min(base_tau * 1.4, 2.0)   # 稍加热
+            temperature = min(base_tau * 1.4, 2.0)   
         elif prev_entropy < 0.10:
             temperature = min(base_tau * 1.2, 1.8)
         elif prev_entropy > 0.20:
-            temperature = max(base_tau * 0.9, 0.5)   # 稍降温
+            temperature = max(base_tau * 0.9, 0.5)  
        
         if prev_entropy < 0.05:
             self.gumbel_sampler.noise_scale = min(getattr(self.gumbel_sampler, 'noise_scale', 1.0) * 1.2, 2.0)
@@ -266,7 +259,7 @@ class NetworkStateTrainer:
             # 'constraint_penalty': 0.0
         }
         
-        self.elbo_computer.state_transition.clear_influence_tracking()
+        # self.elbo_computer.state_transition.clear_influence_tracking()
         
         # Process each batch
         for batch_idx, node_batch in enumerate(node_batches):
@@ -301,7 +294,7 @@ class NetworkStateTrainer:
             )
             print(f"Gumbel sampling finished for batch {batch_idx + 1}/{len(node_batches)}")
 
-            self.elbo_computer.state_transition.broken_links_history.clear()
+            # self.elbo_computer.state_transition.broken_links_history.clear()
             
             # Compute ELBO using BOTH conditional and marginal probabilities
             batch_elbo = self.elbo_computer.compute_elbo_batch(
@@ -323,7 +316,7 @@ class NetworkStateTrainer:
             for key in total_metrics.keys():
                 total_metrics[key] += batch_elbo[key].item()
         
-        del batch_elbo  # 只删除局部变量
+        del batch_elbo  
         del conditional_probs
         del marginal_probs  
         del gumbel_samples
@@ -373,125 +366,27 @@ class NetworkStateTrainer:
                           f"Range: [{param_min:.6f}, {param_max:.6f}], AbsMax: {param_absmax:.6f}")
                 
                 # Only diagnose prediction-related NNs
-                compute_stats(self.elbo_computer.state_transition.influence_nn, "InfluenceNN")
-                compute_stats(self.elbo_computer.state_transition.self_nn, "SelfNN")
+                compute_stats(self.elbo_computer.state_transition.seq_pair_infl_nn, "InfluenceNN")
+                compute_stats(self.elbo_computer.state_transition.seq_self_nn, "SelfNN")
                 
                 print("=" * 50)
             except Exception as e:
                 print(f"[GradDiag] Error: {e}")
         # === End diagnostics ===
 
-
-        # # === 完整诊断 ===
-        # print("\n" + "="*60)
-        # print("GRADIENT DIAGNOSIS")
-        # print("="*60)
-
-        # # 1. 检查参数组数量
-        # print(f"Number of param groups: {len(self.optimizer.param_groups)}")
-        # for i, group in enumerate(self.optimizer.param_groups):
-        #     print(f"  Group {i}: {len(group['params'])} parameters")
-
-        # # 2. 裁剪前 - 计算所有参数组的范数
-        # print("\n--- BEFORE CLIPPING ---")
-        # all_params_list = []
-        # for i, group in enumerate(self.optimizer.param_groups):
-        #     group_params = group['params']
-        #     all_params_list.extend(group_params)
-            
-        #     # 计算这个组的范数
-        #     group_norm = 0.0
-        #     for p in group_params:
-        #         if p.grad is not None:
-        #             group_norm += p.grad.data.norm(2).item() ** 2
-        #     group_norm = group_norm ** 0.5
-        #     print(f"  Group {i} norm: {group_norm:.2f}")
-
-        # # 计算总范数
-        # total_norm_manual = 0.0
-        # for p in all_params_list:
-        #     if p.grad is not None:
-        #         total_norm_manual += p.grad.data.norm(2).item() ** 2
-        # total_norm_manual = total_norm_manual ** 0.5
-        # print(f"  TOTAL norm (manual): {total_norm_manual:.2f}")
-
-        # # 3. 看看哪些参数梯度最大
-        # print("\n--- Top 5 parameters by gradient norm ---")
-        # param_norms = []
-        # model_components = [
-        #     ("NetworkTypeNN", self.mean_field_posterior.network_type_nn),
-        #     ("SelfNN", self.elbo_computer.state_transition.self_nn),
-        #     ("InfluenceNN", self.elbo_computer.state_transition.influence_nn),
-        #     ("InteractionNN", self.elbo_computer.network_evolution.interaction_nn),
-        # ]
-
-        # for component_name, component in model_components:
-        #     for name, param in component.named_parameters():
-        #         if param.grad is not None:
-        #             pnorm = param.grad.norm().item()
-        #             param_norms.append((f"{component_name}.{name}", pnorm, param.shape))
-
-        # param_norms.sort(key=lambda x: x[1], reverse=True)
-        # for name, pnorm, shape in param_norms[:5]:
-        #     print(f"  {name} (shape={shape}): {pnorm:.2f}")
-
-        # # 4. 执行裁剪（只裁剪第一组）
-        # print("\n--- CLIPPING (Group 0 only, max_norm=10.0) ---")
-        # params_group0 = self.optimizer.param_groups[0]['params']
-        # returned_norm = torch.nn.utils.clip_grad_norm_(params_group0, max_norm=10.0)
-        # print(f"  Returned norm: {returned_norm:.2f}")
-
-        # # 5. 裁剪后 - 重新计算范数
-        # print("\n--- AFTER CLIPPING ---")
-        # for i, group in enumerate(self.optimizer.param_groups):
-        #     group_params = group['params']
-        #     group_norm = 0.0
-        #     for p in group_params:
-        #         if p.grad is not None:
-        #             group_norm += p.grad.data.norm(2).item() ** 2
-        #     group_norm = group_norm ** 0.5
-        #     print(f"  Group {i} norm: {group_norm:.2f}")
-
-        # # 重新计算总范数
-        # total_norm_after = 0.0
-        # for p in all_params_list:
-        #     if p.grad is not None:
-        #         total_norm_after += p.grad.data.norm(2).item() ** 2
-        # total_norm_after = total_norm_after ** 0.5
-        # print(f"  TOTAL norm (after): {total_norm_after:.2f}")
-
-        # # 6. 判断
-        # print("\n--- ANALYSIS ---")
-        # if len(self.optimizer.param_groups) > 1:
-        #     print(f"⚠️  You have {len(self.optimizer.param_groups)} param groups!")
-        #     print(f"⚠️  You're only clipping group 0, other groups are NOT clipped!")
-        #     print(f"⚠️  This is why total norm is still large!")
-        # elif returned_norm > 10.1:
-        #     print("⚠️  WARNING: Clipping didn't work even for group 0!")
-        # else:
-        #     print("✓ Clipping worked correctly")
-
-        # print("="*60 + "\n")
-
-
-
-        # total_norm = torch.nn.utils.clip_grad_norm_(self.optimizer.param_groups[0]['params'], max_norm=10.0)
-        # print(f"Gradient norm: {total_norm:.6f}")
-
+       
         print("\n=== IMMEDIATE TEST ===")
         print(f"Number of param groups: {len(self.optimizer.param_groups)}")
-
-        # 不裁剪，只查看
         test_norm = torch.nn.utils.clip_grad_norm_(
             self.optimizer.param_groups[0]['params'], 
-            max_norm=float('inf')  # 不裁剪，只返回范数
+            max_norm=float('inf')  
         )
         print(f"Original norm (no clipping): {test_norm:.2f}")
 
     
         clipped_norm = torch.nn.utils.clip_grad_norm_(
             self.optimizer.param_groups[0]['params'], 
-            max_norm=50.0
+            max_norm=5.0
         )
         print(f"After clipping to 50.0: {clipped_norm:.2f}")
 

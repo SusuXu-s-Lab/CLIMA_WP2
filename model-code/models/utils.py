@@ -1,19 +1,5 @@
 import torch
 
-# def get_state_history_excluding_k(household_idx, decision_k, states, time, L):
-#     """Get state history s_i(t:t-L+1)^{-k} excluding decision type k."""
-#     if isinstance(household_idx, torch.Tensor):
-#         household_idx = household_idx.tolist()
-    
-#     start_time = max(0, time - L + 1)
-#     end_time = time + 1
-    
-#     state_hist = states[household_idx, start_time:end_time, :]
-#     other_decisions = [i for i in range(3) if i != decision_k]
-#     state_hist_excluding_k = state_hist[:, :, other_decisions]
-    
-#     return state_hist_excluding_k.view(len(household_idx), -1)
-
 def get_state_history_excluding_k(household_idx, decision_k, states, time, L):
     """
     OPTIMIZED: Get state history s_i(t:t-L+1)^{-k} excluding decision type k.
