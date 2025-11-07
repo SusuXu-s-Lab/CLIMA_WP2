@@ -57,7 +57,7 @@ python visualize_dynamic_network.py \
 ```
 
 My output (see the explaination about each metric below):
-
+```bash
 Self_RMSE: 0.0527
 Self_R2: 0.7672
 B_RMSE: 0.0872
@@ -115,6 +115,7 @@ Self_R2_d1: 0.2482
 Self_RMSE_d2: 0.0649
 Self_R2_d2: 0.7867
 ---
+```
 
 ## Parameter reference
 
