@@ -22,11 +22,11 @@ For step \(t\), we add a time-dependent **logit bias** \(b(t)\) to the baseline 
 
 - **Self channel** (per node \(i\), state \(d\)):
   \[
-  s_{t,i,d}=\sigma\!ig(\operatorname{logit}(s^{	ext{base}}_{i,d}) + b_s(t)ig)
+  s_{t,i,d}=\sigma\sigma(s^{	ext{base}}_{i,d}) + b_s(t))
   \]
 - **Edge channel** (per attempt \(j\!	o\!i\), state pair \(k\!	o\!d\)):
   \[
-  q_{t,(j	o i,k	o d)}=\sigma\!ig(c_0 + c_1\phi_{j	o i} + B_{d,k} + b_e(t)ig)
+  q_{t,(j	o i,k	o d)}=\sigma(c_0 + c_1\phi_{j	o i} + B_{d,k} + b_e(t))
   \]
 
 Choose \(b_s(t)\), \(b_e(t)\) **strongly negative** during early steps to suppress activations. After the warm-up, the bias goes to zero and hazards revert to their base levels.
