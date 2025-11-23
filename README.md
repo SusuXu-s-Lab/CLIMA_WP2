@@ -459,3 +459,296 @@ python main_multi_real.py \
   --alpha_window 0.9 \
   --lambda_edge 0.5
 ```
+
+---
+
+## 8. Example results
+```bash
+python main_multi_real.py   --real_npz lee_ian_by_cbg_1yr_dr0.005_tr0.6.npz   --max_communities 200   --ref_lon -81.8723   --ref_lat 26.6406   --max_nodes_real 900   --min_nodes_real 100   --num_epochs 300   --lr 5e-4   --label_mode both   --horizon_months 6   --alpha_window 0.9 --lambda_edge 0.5  --save_graphs
+Using device: cpu
+Loading real data from lee_ian_by_cbg_1yr_dr0.005_tr0.6.npz...
+Selected communities (index, N_g, dist_km):
+  idx=553, N= 274, dist=0.544
+  idx=331, N= 880, dist=0.563
+  idx=561, N= 337, dist=0.870
+  idx=558, N= 221, dist=1.210
+  idx=486, N= 301, dist=1.227
+  idx=494, N= 439, dist=1.375
+  idx=473, N= 244, dist=1.470
+  idx=536, N= 298, dist=1.671
+  idx=521, N= 238, dist=1.748
+  idx=552, N= 496, dist=1.878
+  idx=419, N= 406, dist=1.910
+  idx=508, N= 335, dist=2.076
+  idx=388, N= 408, dist=2.097
+  idx=526, N= 435, dist=2.254
+  idx=454, N= 493, dist=2.437
+  idx= 71, N= 836, dist=2.627
+  idx=474, N= 412, dist=2.714
+  idx=336, N= 382, dist=2.749
+  idx=497, N= 377, dist=2.766
+  idx=394, N= 805, dist=2.770
+  idx=296, N= 611, dist=2.848
+  idx=298, N= 388, dist=2.855
+  idx=442, N= 407, dist=2.903
+  idx=514, N= 232, dist=2.996
+  idx=520, N= 355, dist=3.085
+  idx=161, N= 340, dist=3.505
+  idx=222, N= 665, dist=3.574
+  idx=487, N= 271, dist=3.596
+  idx=543, N= 300, dist=3.684
+  idx=475, N= 128, dist=3.713
+  idx= 62, N= 644, dist=3.786
+  idx=313, N= 458, dist=3.828
+  idx=548, N= 474, dist=3.842
+  idx=563, N= 155, dist=3.852
+  idx=502, N= 351, dist=3.900
+  idx=372, N= 856, dist=3.995
+  idx= 52, N= 525, dist=4.040
+  idx=144, N= 262, dist=4.053
+  idx=119, N= 316, dist=4.320
+  idx=154, N= 536, dist=4.382
+  idx=112, N= 713, dist=4.472
+  idx=127, N= 482, dist=4.522
+  idx= 68, N= 523, dist=4.535
+  idx=233, N= 870, dist=4.554
+  idx=499, N= 181, dist=4.590
+  idx=524, N= 315, dist=4.886
+  idx=476, N= 404, dist=4.994
+  idx=282, N= 712, dist=5.017
+  idx=550, N= 225, dist=5.097
+  idx=461, N= 431, dist=5.126
+  idx=353, N= 819, dist=5.189
+  idx= 34, N= 247, dist=5.344
+  idx=120, N= 701, dist=5.507
+  idx= 42, N= 363, dist=5.533
+  idx=286, N= 306, dist=5.545
+  idx=224, N= 506, dist=5.585
+  idx=299, N= 652, dist=5.588
+  idx=496, N= 451, dist=5.596
+  idx=434, N= 824, dist=5.616
+  idx=175, N= 897, dist=5.630
+  idx=555, N= 245, dist=5.730
+  idx=538, N= 461, dist=5.818
+  idx=156, N= 463, dist=6.283
+  idx=554, N= 379, dist=6.360
+  idx=384, N= 305, dist=6.389
+  idx=416, N= 602, dist=6.422
+  idx=477, N= 301, dist=6.422
+  idx=291, N= 559, dist=6.515
+  idx=513, N= 270, dist=6.643
+  idx=196, N= 367, dist=6.670
+  idx=113, N= 325, dist=6.806
+  idx=306, N= 692, dist=6.857
+  idx=516, N= 465, dist=6.885
+  idx=279, N= 632, dist=6.938
+  idx=294, N= 636, dist=7.000
+  idx=515, N= 445, dist=7.129
+  idx=103, N= 602, dist=7.468
+  idx=342, N= 634, dist=7.473
+  idx=493, N= 475, dist=7.518
+  idx=350, N= 615, dist=7.552
+  idx=446, N= 459, dist=7.554
+  idx= 57, N= 596, dist=7.630
+  idx= 55, N= 652, dist=7.635
+  idx=509, N= 294, dist=7.636
+  idx=356, N= 506, dist=7.645
+  idx=108, N= 817, dist=7.657
+  idx=414, N= 612, dist=7.686
+  idx=198, N= 501, dist=7.700
+  idx=220, N= 406, dist=7.759
+  idx=565, N= 338, dist=7.760
+  idx=383, N= 638, dist=7.834
+  idx= 33, N= 836, dist=7.878
+  idx=146, N= 338, dist=7.898
+  idx=324, N= 881, dist=7.965
+  idx=  6, N= 824, dist=7.997
+  idx=292, N= 593, dist=8.129
+  idx=547, N= 598, dist=8.157
+  idx=406, N= 778, dist=8.194
+  idx=116, N= 824, dist=8.257
+  idx= 64, N= 894, dist=8.305
+  idx=345, N= 525, dist=8.307
+  idx=530, N= 527, dist=8.414
+  idx=517, N= 456, dist=8.446
+  idx=  0, N= 427, dist=8.480
+  idx=128, N= 642, dist=8.539
+  idx=462, N= 223, dist=8.639
+  idx=115, N= 426, dist=8.785
+  idx=469, N= 361, dist=8.828
+  idx=544, N= 480, dist=8.844
+  idx=408, N= 347, dist=8.876
+  idx=413, N= 621, dist=8.941
+  idx=559, N= 665, dist=9.112
+  idx=367, N= 895, dist=9.115
+  idx=503, N= 363, dist=9.141
+  idx=145, N= 581, dist=9.324
+  idx=352, N= 699, dist=9.364
+  idx=423, N= 550, dist=9.435
+  idx=528, N= 544, dist=9.472
+  idx=495, N= 575, dist=9.506
+  idx=240, N= 605, dist=9.509
+  idx=260, N= 644, dist=9.536
+  idx=557, N= 426, dist=9.550
+  idx=290, N= 728, dist=9.649
+  idx=177, N= 713, dist=9.704
+  idx=401, N= 295, dist=9.752
+  idx=371, N= 737, dist=9.822
+  idx=184, N= 718, dist=9.857
+  idx=531, N= 588, dist=9.875
+  idx= 53, N= 680, dist=9.933
+  idx=432, N= 562, dist=9.993
+  idx=317, N= 371, dist=10.058
+  idx=349, N= 816, dist=10.134
+  idx=568, N= 139, dist=10.178
+  idx=194, N= 592, dist=10.195
+  idx=218, N= 834, dist=10.196
+  idx=433, N= 461, dist=10.391
+  idx=297, N= 402, dist=10.392
+  idx=188, N= 771, dist=10.397
+  idx=186, N= 607, dist=10.398
+  idx=190, N= 828, dist=10.531
+  idx=512, N= 499, dist=10.598
+  idx=379, N= 418, dist=10.612
+  idx=251, N= 781, dist=10.642
+  idx=409, N= 448, dist=10.656
+  idx=376, N= 776, dist=10.698
+  idx= 60, N= 513, dist=10.737
+  idx=246, N= 703, dist=10.742
+  idx=151, N= 760, dist=10.749
+  idx=242, N= 370, dist=10.762
+  idx=241, N= 740, dist=11.103
+  idx=212, N= 618, dist=11.148
+  idx=534, N= 384, dist=11.295
+  idx=479, N= 566, dist=11.435
+  idx=390, N= 560, dist=11.457
+  idx= 23, N= 834, dist=11.527
+  idx=458, N= 234, dist=11.546
+  idx=126, N= 579, dist=11.600
+  idx=457, N= 127, dist=11.615
+  idx=420, N= 474, dist=11.649
+  idx=468, N= 870, dist=11.698
+  idx=492, N= 525, dist=11.747
+  idx=422, N= 497, dist=11.753
+  idx=566, N= 102, dist=11.800
+  idx=417, N= 735, dist=11.809
+  idx=361, N= 461, dist=11.917
+  idx=504, N= 347, dist=11.963
+  idx=201, N= 512, dist=12.026
+  idx=453, N= 702, dist=12.028
+  idx=410, N= 677, dist=12.047
+  idx=501, N= 513, dist=12.119
+  idx=439, N= 886, dist=12.143
+  idx=183, N= 423, dist=12.156
+  idx=463, N= 675, dist=12.179
+  idx=448, N= 545, dist=12.303
+  idx=223, N= 326, dist=12.429
+  idx=569, N= 146, dist=12.483
+  idx=207, N= 749, dist=12.618
+  idx=537, N= 338, dist=12.647
+  idx=471, N= 132, dist=12.843
+  idx=318, N= 614, dist=12.895
+  idx=206, N= 782, dist=12.918
+  idx=459, N= 699, dist=12.921
+  idx=400, N= 889, dist=12.931
+  idx=466, N= 590, dist=12.967
+  idx=535, N= 628, dist=12.984
+  idx=560, N= 674, dist=13.040
+  idx=213, N= 875, dist=13.046
+  idx=273, N= 480, dist=13.080
+  idx=507, N= 539, dist=13.138
+  idx= 84, N= 701, dist=13.172
+  idx=283, N= 728, dist=13.222
+  idx=522, N= 809, dist=13.363
+  idx= 43, N= 342, dist=13.425
+  idx= 25, N= 842, dist=13.433
+  idx= 80, N= 803, dist=13.586
+  idx= 97, N= 751, dist=13.598
+  idx=171, N= 299, dist=13.648
+  idx=149, N= 738, dist=13.755
+  idx=533, N= 757, dist=13.998
+  idx=  9, N= 863, dist=14.020
+#communities after filtering = 200
+[INFO] Real-data meta: T=13, T_train=7, T_val=6
+[INFO] Real-data meta: T=13, T_train=7, T_val=6
+[INFO] pos_weight per type (sell, repair, vacate) (capped): [14.135292838425986, 20.26526564680407, 46.52741127550511]
+[REAL-NEURAL epoch 001] loss=0.669 (nll=2.495, edge=0.019)
+[REAL-NEURAL epoch 005] loss=0.431 (nll=1.632, edge=0.017)
+[REAL-NEURAL epoch 010] loss=0.402 (nll=1.540, edge=0.017)
+[REAL-NEURAL epoch 015] loss=0.388 (nll=1.493, edge=0.017)
+[REAL-NEURAL epoch 020] loss=0.383 (nll=1.482, edge=0.017)
+[REAL-NEURAL epoch 025] loss=0.385 (nll=1.497, edge=0.017)
+[REAL-NEURAL epoch 030] loss=0.373 (nll=1.446, edge=0.017)
+[REAL-NEURAL epoch 035] loss=0.369 (nll=1.440, edge=0.017)
+[REAL-NEURAL epoch 040] loss=0.371 (nll=1.466, edge=0.017)
+[REAL-NEURAL epoch 045] loss=0.363 (nll=1.426, edge=0.017)
+[REAL-NEURAL epoch 050] loss=0.367 (nll=1.457, edge=0.017)
+[REAL-NEURAL epoch 055] loss=0.354 (nll=1.395, edge=0.017)
+[REAL-NEURAL epoch 060] loss=0.354 (nll=1.397, edge=0.017)
+[REAL-NEURAL epoch 065] loss=0.356 (nll=1.390, edge=0.017)
+[REAL-NEURAL epoch 070] loss=0.350 (nll=1.382, edge=0.017)
+[REAL-NEURAL epoch 075] loss=0.353 (nll=1.393, edge=0.017)
+[REAL-NEURAL epoch 080] loss=0.354 (nll=1.414, edge=0.017)
+[REAL-NEURAL epoch 085] loss=0.343 (nll=1.362, edge=0.017)
+[REAL-NEURAL epoch 090] loss=0.343 (nll=1.356, edge=0.017)
+[REAL-NEURAL epoch 095] loss=0.342 (nll=1.364, edge=0.017)
+[REAL-NEURAL epoch 100] loss=0.344 (nll=1.378, edge=0.017)
+[REAL-NEURAL epoch 105] loss=0.341 (nll=1.362, edge=0.017)
+[REAL-NEURAL epoch 110] loss=0.339 (nll=1.369, edge=0.017)
+[REAL-NEURAL epoch 115] loss=0.334 (nll=1.340, edge=0.017)
+[REAL-NEURAL epoch 120] loss=0.336 (nll=1.357, edge=0.017)
+[REAL-NEURAL epoch 125] loss=0.334 (nll=1.344, edge=0.017)
+[REAL-NEURAL epoch 130] loss=0.333 (nll=1.339, edge=0.017)
+[REAL-NEURAL epoch 135] loss=0.337 (nll=1.369, edge=0.017)
+[REAL-NEURAL epoch 140] loss=0.334 (nll=1.370, edge=0.017)
+[REAL-NEURAL epoch 145] loss=0.328 (nll=1.318, edge=0.017)
+[REAL-NEURAL epoch 150] loss=0.329 (nll=1.334, edge=0.017)
+[REAL-NEURAL epoch 155] loss=0.328 (nll=1.328, edge=0.017)
+[REAL-NEURAL epoch 160] loss=0.329 (nll=1.347, edge=0.017)
+[REAL-NEURAL epoch 165] loss=0.321 (nll=1.308, edge=0.017)
+[REAL-NEURAL epoch 170] loss=0.321 (nll=1.321, edge=0.017)
+[REAL-NEURAL epoch 175] loss=0.321 (nll=1.306, edge=0.017)
+[REAL-NEURAL epoch 180] loss=0.317 (nll=1.296, edge=0.017)
+[REAL-NEURAL epoch 185] loss=0.319 (nll=1.309, edge=0.017)
+[REAL-NEURAL epoch 190] loss=0.318 (nll=1.296, edge=0.017)
+[REAL-NEURAL epoch 195] loss=0.315 (nll=1.297, edge=0.017)
+[REAL-NEURAL epoch 200] loss=0.314 (nll=1.292, edge=0.017)
+[REAL-NEURAL epoch 205] loss=0.321 (nll=1.313, edge=0.017)
+[REAL-NEURAL epoch 210] loss=0.316 (nll=1.317, edge=0.017)
+[REAL-NEURAL epoch 215] loss=0.315 (nll=1.291, edge=0.017)
+[REAL-NEURAL epoch 220] loss=0.319 (nll=1.323, edge=0.017)
+[REAL-NEURAL epoch 225] loss=0.312 (nll=1.299, edge=0.017)
+[REAL-NEURAL epoch 230] loss=0.311 (nll=1.286, edge=0.017)
+[REAL-NEURAL epoch 235] loss=0.313 (nll=1.287, edge=0.017)
+[REAL-NEURAL epoch 240] loss=0.315 (nll=1.293, edge=0.017)
+[REAL-NEURAL epoch 245] loss=0.310 (nll=1.291, edge=0.017)
+[REAL-NEURAL epoch 250] loss=0.313 (nll=1.299, edge=0.017)
+[REAL-NEURAL epoch 255] loss=0.312 (nll=1.284, edge=0.017)
+[REAL-NEURAL epoch 260] loss=0.308 (nll=1.289, edge=0.017)
+[REAL-NEURAL epoch 265] loss=0.307 (nll=1.270, edge=0.017)
+[REAL-NEURAL epoch 270] loss=0.306 (nll=1.279, edge=0.017)
+[REAL-NEURAL epoch 275] loss=0.307 (nll=1.274, edge=0.017)
+[REAL-NEURAL epoch 280] loss=0.310 (nll=1.285, edge=0.017)
+[REAL-NEURAL epoch 285] loss=0.305 (nll=1.276, edge=0.017)
+[REAL-NEURAL epoch 290] loss=0.303 (nll=1.262, edge=0.017)
+[REAL-NEURAL epoch 295] loss=0.305 (nll=1.275, edge=0.017)
+[REAL-NEURAL epoch 300] loss=0.306 (nll=1.262, edge=0.017)
+
+[Sanity check] Tail event counts over selected communities:
+    sell  - exact_tail_count = 3237, window_tail_count (H=6) = 5992
+    repair- exact_tail_count = 1042, window_tail_count (H=6) = 2264
+    vacate- exact_tail_count = 0, window_tail_count (H=6) = 0
+[INFO] Saved learned graphs for 200 communities to lee_ian_by_cbg_1yr_dr0.005_tr0.6_learned_graphs.npz
+
+[Real-data coupled Hawkes results]
+T_train = 7, T_val = 6
+#communities (trained) = 200
+    sell_auc_tail:          0.7775738328579003
+    sell_ap_tail:           0.04650519445691261
+    sell_auc_window_tail:  0.7478070021191713
+    sell_ap_window_tail:   0.04200633710204722
+  repair_auc_tail:          0.9795812464262316
+  repair_ap_tail:           0.06418420127241092
+  repair_auc_window_tail:  0.9777129510620689
+  repair_ap_window_tail:   0.1047360045921198
+  ```
